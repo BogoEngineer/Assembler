@@ -1,9 +1,12 @@
 #ifndef FORWARDREFERENCETABLE_H
 #define FORWARDREFERENCETABLE_H
-#include "INCLUDES.h"
-#include "ForwardReferenceTableEntry.h"
- 
+#include "INCLUDES.h" 
 #include <vector>
+
+struct ForwardReferenceTableEntry{
+    int patch;
+    int byte;
+};
 
 class ForwardReferenceTable{
     private:
