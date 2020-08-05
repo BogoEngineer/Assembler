@@ -1,4 +1,4 @@
 /.vscode
-/test.txt
-/test1.txt
+/test_asm.s
+/testoutput.txt
 /main
