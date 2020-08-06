@@ -13,9 +13,9 @@ struct Instruction{
     Instruction(string n, int oc, int on): name(n), OC(oc), operand_number(on){};
 };
 
-struct find_id : std::unary_function<Instruction, bool> {
+struct find_instruction : std::unary_function<Instruction, bool> {
     string name;
-    find_id(string n):name(n) { }
+    find_instruction(string n):name(n) { }
     bool operator()(Instruction const& i) const {
         return i.name == name;
     }
@@ -33,11 +33,12 @@ class Assembler{
         vector<string> machine_code;
         vector<Instruction> instruction_set;
         int location_counter;
+        string current_section;
 
         string processOneLine(string line); // one line assembly ==> one line binary
         string dealWithInstruction(string instruction); // recognize given instruction and return binary code for given instruction
         void dealWithDirective(string directive); // recognize given directive and do stuff
-        void dealWithSymbol(string symbol); // symbol table etc.. logic
+        void defineSymbol(string symbol, bool local, bool defined); // symbol table etc.. logic
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
 
         string handleError(string error); // maybe create some error table and then return int as a code to take a specific message for output

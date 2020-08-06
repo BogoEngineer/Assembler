@@ -6,6 +6,9 @@ Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
     output_file_name = ofn;
 
+    current_section = "text";
+    location_counter = 0;
+
     st = new SymbolTable();
     frt = new ForwardReferenceTable();
     fm = new FileManager();
@@ -56,7 +59,7 @@ string Assembler::processOneLine(string line){
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
-        dealWithSymbol(to_process[0].substr(0, to_process[0].length()-1));
+        defineSymbol(to_process[0].substr(0, to_process[0].length()-1), true, true);
         lab = true;
     }
     bool inst = true;
@@ -71,7 +74,7 @@ string Assembler::processOneLine(string line){
         if(inst) instruction = instruction + n + " ";
         else comment = comment + n + " ";
     }
-    if(instruction != "") dealWithInstruction(instruction);
+    //if(instruction != "") dealWithInstruction(instruction);
     if(comment != "") dealWithComment(comment);
     return "";
 }
@@ -83,7 +86,7 @@ string Assembler::dealWithInstruction(string instruction){
     }
     vector<string> words = tm->extractWords(instruction); 
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
-    Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_id(words[0])).base();
+    Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
     /* 
         Structure of instruction:
         Instruction Description byte: OC4|OC3|OC2|OC1|OC0|S|Un|Un
@@ -249,7 +252,9 @@ string Assembler::dealWithInstruction(string instruction){
 void Assembler::dealWithDirective(string directive){
 }
 
-void Assembler::dealWithSymbol(string symbol){
+void Assembler::defineSymbol(string symbol, bool local, bool defined){
+    if(st->findSymbol(symbol) == nullptr) st->addSymbol
+    (*(new SymbolTableEntry(symbol, current_section, location_counter, local, defined)));
 }
 
 void Assembler::dealWithComment(string comment){
