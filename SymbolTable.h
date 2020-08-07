@@ -5,7 +5,10 @@
 
 #include "ForwardReferenceTable.h"
 
+class ForwardReferenceTable;
+
 struct SymbolTableEntry{
+public:
     static int global_id;
     string name;
     int id;
@@ -15,7 +18,7 @@ struct SymbolTableEntry{
     bool defined;
     ForwardReferenceTable* flink;
 
-    SymbolTableEntry(string n, string s, int o, bool l, bool d): 
+    SymbolTableEntry(string n, string s="", int o=0, bool l=0, bool d=false): 
     name(n), section(s), offset(o), local(l), defined(d){
         id = global_id;
         global_id += 1;

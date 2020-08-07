@@ -10,7 +10,6 @@ Assembler::Assembler(string ifn, string ofn){
     location_counter = 0;
 
     st = new SymbolTable();
-    frt = new ForwardReferenceTable();
     fm = new FileManager();
     tm = new TextManipulator();
 
@@ -47,7 +46,9 @@ int Assembler::start(){
     assembly_code = fm->getContent(input_file_name);
     machine_code = {};
     for(string line: assembly_code){
-        machine_code.push_back(processOneLine(line));
+        string processedLine = processOneLine(line);
+        machine_code.push_back(processedLine);
+        cout<<"byteCode: "<<processedLine<<endl;
     }
     //fm->setContent(machine_code, output_file_name);
     return 0;
@@ -55,7 +56,7 @@ int Assembler::start(){
 
 string Assembler::processOneLine(string line){
     // Line recognition - section/instruction/label
-    if(tm->isEmpty(line)) return "";
+    if(tm->isEmpty(line)) return "prazan lajn";
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
@@ -74,7 +75,7 @@ string Assembler::processOneLine(string line){
         if(inst) instruction = instruction + n + " ";
         else comment = comment + n + " ";
     }
-    //if(instruction != "") dealWithInstruction(instruction);
+    if(instruction != "") return dealWithInstruction(instruction);
     if(comment != "") dealWithComment(comment);
     return "";
 }
@@ -82,7 +83,7 @@ string Assembler::processOneLine(string line){
 string Assembler::dealWithInstruction(string instruction){
     if(instruction[0] == '.'){
         dealWithDirective(instruction);
-        return ""; // no byte code for object file
+        return "directive"; // no byte code for object file
     }
     vector<string> words = tm->extractWords(instruction); 
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
@@ -106,13 +107,16 @@ string Assembler::dealWithInstruction(string instruction){
                 0xA - no register is used
             L/H - lower or higher byte is used in case of register direct addressing mode for operand with size of 1 byte
     */
-   char instr_descr_byte = inst->OC<<3;
+    char instr_descr_byte = (inst->OC)<<3;
+    vector<char> byte_code = {instr_descr_byte}; // array of bytes for object file ... up to 7 per instruction
     switch(inst->operand_number){
         case 0:
             // size bit and unsused bits are 0, no need to do anything
-            return "byte code";
+            cout<<inst->name<< " ";
+            return byteCodeToString(byte_code);
             break;
         case 1:
+        cout<<inst->name<< " ";
         {
             bool is_jump = false;
             bool size_mask;
@@ -124,44 +128,67 @@ string Assembler::dealWithInstruction(string instruction){
             if(words[0] == "pop" && address_mode == 0x0) return handleError("Immediate addressing mode with destination operand is prohibited.");
             
             // op descr byte
-            char op_descr_byte = address_mode << 5;
+            unsigned char op_descr_byte = address_mode << 5;
+            
             char register_bits = 0xA;
             if(address_mode == 0x1 || address_mode ==  0x2 || address_mode == 0x3){
                 register_bits = determineRegister(words[1]);
+                cout<<" register bits: "<<(int)register_bits;
+
             }
-
+cout<<" Address mode: "<<(int)op_descr_byte;
             op_descr_byte |= (register_bits<<1);
-
+cout<<" Address mode: "<<(int)op_descr_byte;
             // L/H bit
             if(address_mode == 0x1 && size_mask == 0){
                 op_descr_byte |= higherByteRegister(words[1]);
             }
 
             // operand size bytes
-            if(address_mode == 0x1 || address_mode == 0x2) return "byte code";    
-            
+            if(address_mode == 0x1 || address_mode == 0x2){
+                byte_code.push_back(op_descr_byte);
+                return byteCodeToString(byte_code);
+            }   
+
             char operand1_related_byte1;
             char operand1_related_byte2;
-            if(address_mode == 0x3 || address_mode == 0x4){
-                // filling those up from symbol table etc...
-                return "byte code";
-            }
+            /*if(address_mode == 0x3 || address_mode == 0x4){
+                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+                if(ste->defined == true){
+                    operand1_related_byte1 = ste->offset & 0xFF00;
+                    operand1_related_byte2 = ste->offset & 0x00FF;
+                }else{
+                    operand1_related_byte1 = 0;
+                    operand1_related_byte2 = 0;
+                }
+                byte_code.push_back(operand1_related_byte1);
+                byte_code.push_back(operand1_related_byte2);
+                return byteCodeToString(byte_code);
+            }*/
+
+            return "jedan operand";
 
             if(address_mode == 0x0){
                 short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
-                    return "byte code";
+                    byte_code.push_back(operand1_related_byte1);
+                    return byteCodeToString(byte_code);
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand1_related_byte1 = literal & 0xFF00; 
                     operand1_related_byte2 = literal & 0x00FF;
-                    return "byte code";
+
+                    byte_code.push_back(operand1_related_byte1);
+                    byte_code.push_back(operand1_related_byte2);
+                    return byteCodeToString(byte_code);
                 }
             }
             break;
         }
         case 2:
+        cout<<inst->name<< " ";
+        return "dva operanda";
         {
             bool size_mask;
             char address_mode1 = getAdressingMode(words[1], false);
@@ -189,22 +216,37 @@ string Assembler::dealWithInstruction(string instruction){
                 op_descr_byte1 |= higherByteRegister(words[1]);
             }
 
-            if(address_mode1 == 0x1 || address_mode1 == 0x2){};    
+            byte_code.push_back(op_descr_byte1);
+
+            if(address_mode1 == 0x1 || address_mode1 == 0x2){};    // no pushing operand related bytes
             
             char operand1_related_byte1;
             char operand1_related_byte2;
             if(address_mode1 == 0x3 || address_mode1 == 0x4){
-                // filling those up from symbol table etc...
+                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+                if(ste->defined == true){
+                    operand1_related_byte1 = ste->offset & 0xFF00;
+                    operand1_related_byte2 = ste->offset & 0x00FF;
+                }else{
+                    operand1_related_byte1 = 0;
+                    operand1_related_byte2 = 0;
+                }
+                byte_code.push_back(operand1_related_byte1);
+                byte_code.push_back(operand1_related_byte2);
             }
 
             if(address_mode1 == 0x0){
                 short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
+                    byte_code.push_back(operand1_related_byte1);
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand1_related_byte1 = literal & 0xFF00; 
                     operand1_related_byte2 = literal & 0x00FF;
+
+                    byte_code.push_back(operand1_related_byte1);
+                    byte_code.push_back(operand1_related_byte2);
                 }
             }
 
@@ -223,25 +265,39 @@ string Assembler::dealWithInstruction(string instruction){
                 op_descr_byte2 |= higherByteRegister(words[2]);
             }
 
-            if(address_mode2 == 0x1 || address_mode2 == 0x2) return "byte code";    
+            byte_code.push_back(op_descr_byte2);
+
+            if(address_mode2 == 0x1 || address_mode2 == 0x2) return byteCodeToString(byte_code);    
             
             char operand2_related_byte1;
             char operand2_related_byte2;
             if(address_mode2 == 0x3 || address_mode2 == 0x4){
-                // filling those up from symbol table etc...
-                return "byte code";
+                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+                if(ste->defined == true){
+                    operand2_related_byte1 = ste->offset & 0xFF00;
+                    operand2_related_byte2 = ste->offset & 0x00FF;
+                }else{
+                    operand2_related_byte1 = 0;
+                    operand2_related_byte2 = 0;
+                }
+                byte_code.push_back(operand2_related_byte1);
+                byte_code.push_back(operand2_related_byte2);
+                return byteCodeToString(byte_code);
             }
 
             if(address_mode2 == 0x0){
                 short literal = stoi(words[2].find('$') == string::npos ? words[2] : words[2].substr(1));
                 if(size_mask == 0){ 
                     operand2_related_byte1 = literal;
-                    return "byte code";
+                    byte_code.push_back(operand2_related_byte1);
+                    return byteCodeToString(byte_code);
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand2_related_byte1 = literal & 0xFF00; 
                     operand2_related_byte2 = literal & 0x00FF;
-                    return "byte code";
+                    byte_code.push_back(operand2_related_byte1);
+                    byte_code.push_back(operand2_related_byte2);
+                    return byteCodeToString(byte_code);
                 }
             }
         }
@@ -255,6 +311,10 @@ void Assembler::dealWithDirective(string directive){
 void Assembler::defineSymbol(string symbol, bool local, bool defined){
     if(st->findSymbol(symbol) == nullptr) st->addSymbol
     (*(new SymbolTableEntry(symbol, current_section, location_counter, local, defined)));
+    else
+    {
+        handleError("Symbol cant be defined more than once: " + symbol);
+    }
 }
 
 void Assembler::dealWithComment(string comment){
@@ -293,7 +353,7 @@ char Assembler::getAdressingMode(string operand, bool is_jump){
     }
 }   
 
-char Assembler::determineRegister(string operand){
+int Assembler::determineRegister(string operand){
     int start = operand.find('%');
     if(start == string::npos) {
         cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
@@ -304,7 +364,8 @@ char Assembler::determineRegister(string operand){
         cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
         return 16;
     }
-    return rgstr[1];
+    cout<<" register: "<<rgstr[1];
+    return rgstr[1]-'0';
 }
 
 char Assembler::higherByteRegister(string operand){
@@ -317,7 +378,33 @@ char Assembler::higherByteRegister(string operand){
     return rgstr[2] == 'h' ? 1 : 0;
 }
 
+SymbolTableEntry* Assembler::dealWithSymbol(string symbolName){
+    SymbolTableEntry* found = st->findSymbol(symbolName);
+    if(found == nullptr){
+        st->addSymbol(*(new SymbolTableEntry(symbolName)));
+        SymbolTableEntry* added = st->findSymbol(symbolName);
+        added->flink->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
+        return added;
+    }else{
+        if(found->defined == true){
+            return found;
+        }else{
+            found->flink->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
+            return found;
+        }
+    }
+}
+
+string Assembler::byteCodeToString(vector<char> byte_code){
+    std::stringstream ss;
+    for(char c: byte_code){
+        if((c & 0xF0) == 0x0) ss<<"0";
+        ss << std::hex << (int)c;
+    }
+    return ss.str();
+}
+
 string Assembler::handleError(string error){
     cout<<error<<endl;
-    return error;
+    abort();
 }
