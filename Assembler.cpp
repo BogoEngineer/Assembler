@@ -8,6 +8,7 @@ Assembler::Assembler(string ifn, string ofn){
 
     current_section = "text";
     location_counter = 0;
+    line_of_code = 0;
 
     st = new SymbolTable();
     fm = new FileManager();
@@ -46,17 +47,27 @@ int Assembler::start(){
     assembly_code = fm->getContent(input_file_name);
     machine_code = {};
     for(string line: assembly_code){
-        string processedLine = processOneLine(line);
-        machine_code.push_back(processedLine);
-        cout<<"byteCode: "<<processedLine<<endl;
+        vector<char> processedLine = processOneLine(line);
+        //machine_code.push_back(processedLine);
+        machine_code.insert(machine_code.end(), processedLine.begin(), processedLine.end());
+        cout<<"byteCode: "<<byteCodeToString(processedLine)<<endl;
     }
+
+    st->backpatch(&machine_code);
+
+    cout<<"MACHINE CODE:"<<endl;
+    cout<< byteCodeToString(machine_code);
+    cout<<"LOCATION COUNTER: "<<location_counter;
+
+    cout<<"PATCHED: "<<(int)machine_code[12];
     //fm->setContent(machine_code, output_file_name);
     return 0;
 }
 
-string Assembler::processOneLine(string line){
+vector<char> Assembler::processOneLine(string line){
+    line_of_code += 1;
     // Line recognition - section/instruction/label
-    if(tm->isEmpty(line)) return "prazan lajn";
+    if(tm->isEmpty(line)) return {};
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
@@ -77,13 +88,13 @@ string Assembler::processOneLine(string line){
     }
     if(instruction != "") return dealWithInstruction(instruction);
     if(comment != "") dealWithComment(comment);
-    return "";
+    return {};
 }
 
-string Assembler::dealWithInstruction(string instruction){
+vector<char> Assembler::dealWithInstruction(string instruction){
     if(instruction[0] == '.'){
         dealWithDirective(instruction);
-        return "directive"; // no byte code for object file
+        return {}; // no byte code for object file
     }
     vector<string> words = tm->extractWords(instruction); 
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
@@ -113,7 +124,9 @@ string Assembler::dealWithInstruction(string instruction){
         case 0:
             // size bit and unsused bits are 0, no need to do anything
             cout<<inst->name<< " ";
-            return byteCodeToString(byte_code);
+            
+            location_counter += byte_code.size();
+            return byte_code;
             break;
         case 1:
         cout<<inst->name<< " ";
@@ -125,55 +138,61 @@ string Assembler::dealWithInstruction(string instruction){
             if(address_mode == 0x0 || address_mode == 0x1) size_mask = 1;
             else if(address_mode == 0x2 || address_mode == 0x3 || address_mode == 0x4) size_mask = 0;
             instr_descr_byte |= size_mask<<2;
-            if(words[0] == "pop" && address_mode == 0x0) return handleError("Immediate addressing mode with destination operand is prohibited.");
+            if(words[0] == "pop" && address_mode == 0x0) handleError("Immediate addressing mode with destination operand is prohibited.");
             
             // op descr byte
             unsigned char op_descr_byte = address_mode << 5;
             
-            char register_bits = 0xA;
+            unsigned char register_bits = 0xA;
             if(address_mode == 0x1 || address_mode ==  0x2 || address_mode == 0x3){
                 register_bits = determineRegister(words[1]);
-                cout<<" register bits: "<<(int)register_bits;
-
             }
-cout<<" Address mode: "<<(int)op_descr_byte;
+
             op_descr_byte |= (register_bits<<1);
-cout<<" Address mode: "<<(int)op_descr_byte;
+            //cout<<" Address mode: "<<(int)op_descr_byte;
             // L/H bit
             if(address_mode == 0x1 && size_mask == 0){
                 op_descr_byte |= higherByteRegister(words[1]);
             }
 
-            // operand size bytes
-            if(address_mode == 0x1 || address_mode == 0x2){
-                byte_code.push_back(op_descr_byte);
-                return byteCodeToString(byte_code);
-            }   
+            byte_code.push_back(op_descr_byte);
 
-            char operand1_related_byte1;
-            char operand1_related_byte2;
-            /*if(address_mode == 0x3 || address_mode == 0x4){
-                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+            
+            if(address_mode == 0x1 || address_mode == 0x2){
+                location_counter += byte_code.size();
+                return byte_code; // there are no operand related bytes
+            } 
+            
+
+            // operand size bytes
+            unsigned char operand1_related_byte1;
+            unsigned char operand1_related_byte2;
+            if(address_mode == 0x3 || address_mode == 0x4){
+                string symbol_name = words[1];
+                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[1].substr(1);
+                SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
                 if(ste->defined == true){
-                    operand1_related_byte1 = ste->offset & 0xFF00;
-                    operand1_related_byte2 = ste->offset & 0x00FF;
+                    operand1_related_byte1 = (ste->offset>>8) & 0xFF;
+                    operand1_related_byte2 = (ste->offset) & 0xFF;
                 }else{
                     operand1_related_byte1 = 0;
                     operand1_related_byte2 = 0;
-                }
+                } 
                 byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
-                return byteCodeToString(byte_code);
-            }*/
 
-            return "jedan operand";
+                location_counter += byte_code.size();
+                return byte_code;
+            }
 
             if(address_mode == 0x0){
                 short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
                     byte_code.push_back(operand1_related_byte1);
-                    return byteCodeToString(byte_code);
+
+                    location_counter += byte_code.size();
+                    return byte_code;
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand1_related_byte1 = literal & 0xFF00; 
@@ -181,25 +200,28 @@ cout<<" Address mode: "<<(int)op_descr_byte;
 
                     byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
-                    return byteCodeToString(byte_code);
+
+                    location_counter += byte_code.size();
+                    return byte_code;
                 }
             }
             break;
         }
         case 2:
-        cout<<inst->name<< " ";
-        return "dva operanda";
         {
+            cout<<inst->name<< " ";
             bool size_mask;
             char address_mode1 = getAdressingMode(words[1], false);
             char address_mode2 = getAdressingMode(words[2], false);
-            if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test")) return handleError("Immediate addressing mode with destination operand is prohibited.");
+            if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test")) handleError("Immediate addressing mode with destination operand is prohibited.");
             char addres_mode = (address_mode1 > address_mode2) ? address_mode1 : address_mode2;
             if(address_mode1 == 0x0 || address_mode1 == 0x1) size_mask = 1;
             else if(address_mode1 == 0x2 || address_mode1 == 0x3 || address_mode1 == 0x4) size_mask = 0;
             instr_descr_byte |= size_mask<<2;
 
             // operand bytes
+
+            int address_field_offset = 1;
 
             // FIRST OPERAND
             char op_descr_byte1 = address_mode1 << 5;
@@ -216,6 +238,7 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                 op_descr_byte1 |= higherByteRegister(words[1]);
             }
 
+            address_field_offset += 1;
             byte_code.push_back(op_descr_byte1);
 
             if(address_mode1 == 0x1 || address_mode1 == 0x2){};    // no pushing operand related bytes
@@ -223,7 +246,9 @@ cout<<" Address mode: "<<(int)op_descr_byte;
             char operand1_related_byte1;
             char operand1_related_byte2;
             if(address_mode1 == 0x3 || address_mode1 == 0x4){
-                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+                string symbol_name = words[1];
+                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[1].substr(1);
+                SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
                 if(ste->defined == true){
                     operand1_related_byte1 = ste->offset & 0xFF00;
                     operand1_related_byte2 = ste->offset & 0x00FF;
@@ -231,6 +256,8 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                     operand1_related_byte1 = 0;
                     operand1_related_byte2 = 0;
                 }
+
+                address_field_offset += 2;
                 byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
             }
@@ -239,12 +266,14 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                 short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
+                    address_field_offset += 1;
                     byte_code.push_back(operand1_related_byte1);
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand1_related_byte1 = literal & 0xFF00; 
                     operand1_related_byte2 = literal & 0x00FF;
 
+                    address_field_offset += 2;
                     byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
                 }
@@ -265,14 +294,20 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                 op_descr_byte2 |= higherByteRegister(words[2]);
             }
 
+            address_field_offset += 1;
             byte_code.push_back(op_descr_byte2);
 
-            if(address_mode2 == 0x1 || address_mode2 == 0x2) return byteCodeToString(byte_code);    
-            
+            if(address_mode2 == 0x1 || address_mode2 == 0x2) {
+                location_counter += byte_code.size();
+                return byte_code;    
+            }
+
             char operand2_related_byte1;
             char operand2_related_byte2;
             if(address_mode2 == 0x3 || address_mode2 == 0x4){
-                SymbolTableEntry* ste = dealWithSymbol(words[1]);
+                string symbol_name = words[2];
+                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[2].substr(1);
+                SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset);
                 if(ste->defined == true){
                     operand2_related_byte1 = ste->offset & 0xFF00;
                     operand2_related_byte2 = ste->offset & 0x00FF;
@@ -282,7 +317,9 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                 }
                 byte_code.push_back(operand2_related_byte1);
                 byte_code.push_back(operand2_related_byte2);
-                return byteCodeToString(byte_code);
+
+                location_counter += byte_code.size();
+                return byte_code;
             }
 
             if(address_mode2 == 0x0){
@@ -290,30 +327,39 @@ cout<<" Address mode: "<<(int)op_descr_byte;
                 if(size_mask == 0){ 
                     operand2_related_byte1 = literal;
                     byte_code.push_back(operand2_related_byte1);
-                    return byteCodeToString(byte_code);
+
+                    location_counter += byte_code.size();
+                    return byte_code;
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand2_related_byte1 = literal & 0xFF00; 
                     operand2_related_byte2 = literal & 0x00FF;
                     byte_code.push_back(operand2_related_byte1);
                     byte_code.push_back(operand2_related_byte2);
-                    return byteCodeToString(byte_code);
+
+                    location_counter += byte_code.size();
+                    return byte_code;
                 }
             }
         }
     }
-    return "some binary code";
+    handleError("Too much or too many operands for instruction!");
+    return {};
 }
 
 void Assembler::dealWithDirective(string directive){
 }
 
 void Assembler::defineSymbol(string symbol, bool local, bool defined){
-    if(st->findSymbol(symbol) == nullptr) st->addSymbol
+    SymbolTableEntry* found = st->findSymbol(symbol);
+    if(found == nullptr) st->addSymbol
     (*(new SymbolTableEntry(symbol, current_section, location_counter, local, defined)));
     else
     {
-        handleError("Symbol cant be defined more than once: " + symbol);
+        if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
+        found->defined = true;
+        found->offset = location_counter;
+        found->section = "";
     }
 }
 
@@ -322,7 +368,7 @@ void Assembler::dealWithComment(string comment){
 
 char Assembler::getAdressingMode(string operand, bool is_jump){
     if(is_jump){
-        if(operand[0]=='*'){
+        if(operand[0] == '*'){
             switch(operand[1]){
                 case '%':
                     return 0x1;
@@ -364,7 +410,6 @@ int Assembler::determineRegister(string operand){
         cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
         return 16;
     }
-    cout<<" register: "<<rgstr[1];
     return rgstr[1]-'0';
 }
 
@@ -378,18 +423,18 @@ char Assembler::higherByteRegister(string operand){
     return rgstr[2] == 'h' ? 1 : 0;
 }
 
-SymbolTableEntry* Assembler::dealWithSymbol(string symbolName){
+SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset){
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
         st->addSymbol(*(new SymbolTableEntry(symbolName)));
         SymbolTableEntry* added = st->findSymbol(symbolName);
-        added->flink->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
+        added->addForwardReference(*(new ForwardReferenceTableEntry(location_counter + address_field_offset)));
         return added;
     }else{
         if(found->defined == true){
             return found;
         }else{
-            found->flink->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
+            found->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
             return found;
         }
     }
@@ -397,7 +442,7 @@ SymbolTableEntry* Assembler::dealWithSymbol(string symbolName){
 
 string Assembler::byteCodeToString(vector<char> byte_code){
     std::stringstream ss;
-    for(char c: byte_code){
+    for(unsigned char c: byte_code){
         if((c & 0xF0) == 0x0) ss<<"0";
         ss << std::hex << (int)c;
     }

@@ -1,7 +1,6 @@
 #ifndef ASSEMBLER_H
 #define ASSEMBLER_H
 
-#include "ForwardReferenceTable.h"
 #include "FileManager.h"
 #include "TextManipulator.h"
 #include "SymbolTable.h"
@@ -29,17 +28,18 @@ class Assembler{
         string input_file_name;
         string output_file_name;
         vector<string> assembly_code;
-        vector<string> machine_code;
+        vector<char> machine_code;
         vector<Instruction> instruction_set;
         int location_counter;
+        int line_of_code;
         string current_section;
 
-        string processOneLine(string line); // one line assembly ==> one line binary
-        string dealWithInstruction(string instruction); // recognize given instruction and return binary code for given instruction
+        vector<char> processOneLine(string line); // one line assembly ==> one line binary
+        vector<char> dealWithInstruction(string instruction); // recognize given instruction and return binary code for given instruction
         void dealWithDirective(string directive); // recognize given directive and do stuff
         void defineSymbol(string symbol, bool local, bool defined); // symbol table etc.. logic
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
-        SymbolTableEntry* dealWithSymbol(string symbolName); // deal with situation when symbol is found in a address field
+        SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset); // deal with situation when symbol is found in a address field
 
         string handleError(string error); // maybe create some error table and then return int as a code to take a specific message for output
 

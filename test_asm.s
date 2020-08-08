@@ -1,6 +1,8 @@
   labela: #komentar labela  
-    push nesto
+  nesto:
+    push $255
         pop nes_drugo
+      jmp  *svasta
   labela5:   zez
 #jos jedan  
 .equ prvalabela, izraz
@@ -12,9 +14,10 @@ ret
  
 list_byte_bss:  
 .byte 0b01110101, 0b1111110
-
+  src: 
 labela1: neki izraz
 pop %r6 
-mov src, dst
+mov %r3, nesto
+svasta:
 
 .end
