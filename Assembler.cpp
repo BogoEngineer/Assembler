@@ -1,18 +1,21 @@
 #include "Assembler.h"
 #include "INCLUDES.h"
 #include <algorithm>
+#include <map>
 
 Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
     output_file_name = ofn;
 
-    current_section = "text";
     location_counter = 0;
     line_of_code = 0;
 
     st = new SymbolTable();
     fm = new FileManager();
     tm = new TextManipulator();
+    current_section = nullptr;
+    
+    sections = {};
 
     instruction_set = {
         Instruction("halt", 0x00, 0),
@@ -41,25 +44,28 @@ Assembler::Assembler(string ifn, string ofn){
         Instruction("shl", 0x17, 2),
         Instruction("shr", 0x18, 2)
     };
+
+    directive_map = createMap();
 }
 
 int Assembler::start(){
     assembly_code = fm->getContent(input_file_name);
-    machine_code = {};
     for(string line: assembly_code){
         vector<char> processedLine = processOneLine(line);
         //machine_code.push_back(processedLine);
-        machine_code.insert(machine_code.end(), processedLine.begin(), processedLine.end());
+        
+        current_section->machine_code.insert(current_section->machine_code.end(), processedLine.begin(), processedLine.end());
         cout<<"byteCode: "<<byteCodeToString(processedLine)<<endl;
     }
 
-    st->backpatch(&machine_code);
+    for(Section section: sections){
+        st->backpatch(&(section.machine_code));
+    }
 
     cout<<"MACHINE CODE:"<<endl;
-    cout<< byteCodeToString(machine_code);
+    //cout<< byteCodeToString(machine_code);
     cout<<"LOCATION COUNTER: "<<location_counter;
 
-    cout<<"PATCHED: "<<(int)machine_code[12];
     //fm->setContent(machine_code, output_file_name);
     return 0;
 }
@@ -93,7 +99,7 @@ vector<char> Assembler::processOneLine(string line){
 
 vector<char> Assembler::dealWithInstruction(string instruction){
     if(instruction[0] == '.'){
-        dealWithDirective(instruction);
+        dealWithDirective(instruction.substr(1));
         return {}; // no byte code for object file
     }
     vector<string> words = tm->extractWords(instruction); 
@@ -348,12 +354,38 @@ vector<char> Assembler::dealWithInstruction(string instruction){
 }
 
 void Assembler::dealWithDirective(string directive){
+    vector<string> words = tm->extractWords(directive); 
+    switch (directive_map[words[0]])
+    {
+    case 0: // .section
+        dealWithSection(words[1]);
+        location_counter = 0;
+        break;
+    case 1: // .equ
+        break;
+    case 2: // .end
+        end();
+        break;
+    case 3: // .global
+        break;
+    case 4: // .extern
+        break;
+    case 5: // .byte
+        break;
+    case 6: // .word
+        break;
+    case 7: // .skip
+        break;
+    default: // manual
+        handleError("Directive does not exist.");
+        break;
+    }
 }
 
 void Assembler::defineSymbol(string symbol, bool local, bool defined){
     SymbolTableEntry* found = st->findSymbol(symbol);
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, current_section, location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, current_section->name, location_counter, local, defined)));
     else
     {
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
@@ -453,3 +485,36 @@ string Assembler::handleError(string error){
     cout<<error<<endl;
     abort();
 }
+
+void Assembler::dealWithSection(string section_name){
+    Section* found = findSection(section_name);
+    if(found != nullptr){
+        current_section = found;
+        return;
+    }
+    current_section = new Section(section_name);
+    sections.push_back(*current_section);
+    return;
+}
+
+Section* Assembler::findSection(string section){
+    vector<Section>::iterator it = std::find_if(sections.begin(), sections.end(), find_section(section));
+    if(it != sections.end()) return it.base();
+    return nullptr;
+}
+
+map<string,int> Assembler::createMap()
+{
+  map<string,int> m;
+  m["section"] = 0;
+  m["equ"] = 1;
+  m["end"] = 2;
+  m["global"] = 3;
+  m["extern"] = 4;
+  m["byte"] = 5;
+  m["word"] = 6;
+  m["skip"] = 7;
+  return m;
+}
+
+void Assembler::end(){}
