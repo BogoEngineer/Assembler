@@ -17,8 +17,9 @@ list_byte_bss:
 .byte 0b01110101, 0b1111110
   src: 
 labela1: .word 10
-pop %r6 
-mov %r3, svasta
+pop 20(%pc) 
+mov $55, svasta
+and 50(%r2), svasta(%pc)
 svasta:
 
 .end

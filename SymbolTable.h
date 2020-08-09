@@ -48,6 +48,7 @@ class SymbolTable{
         SymbolTableEntry* findSymbol(string symbol);
         void addSymbol(SymbolTableEntry ste);
         void backpatch(vector<char>& machine_code, string section_name);
+        string toString();
 };
 
 #endif

@@ -51,6 +51,7 @@ class Assembler{
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
         SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset); // deal with situation when symbol is found in a address field
         void dealWithSection(string section_name); // sets current section
+        void dealWithRelocationRecord(string symbol, int reg_num); // will be called after dealing with a symbol inside of an instruction
 
         Section* findSection(string section); // finds section with given name
 
@@ -60,6 +61,7 @@ class Assembler{
         static int determineRegister(string operand); // get register number if one is used from operand
         static char higherByteRegister(string operand); // is higher 8 or lower 8 bits used for register direct addressing mode: 0-lower, 1-higher
 
+        bool isSymbol(string x);
         map<string, int> createMap();
         void end();
     public: 

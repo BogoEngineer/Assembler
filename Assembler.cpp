@@ -50,6 +50,7 @@ Assembler::Assembler(string ifn, string ofn){
 int Assembler::start(){
     assembly_code = fm->getContent(input_file_name);
     for(string line: assembly_code){
+        
         vector<char> processedLine = processOneLine(line);
         //machine_code.push_back(processedLine);
 
@@ -57,7 +58,6 @@ int Assembler::start(){
     }
 
     for(Section* section: sections){
-        cout<<"SEC NAME: "<<section->name;
         st->backpatch(section->machine_code, section->name);
     }
 
@@ -176,16 +176,31 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             unsigned char operand1_related_byte1;
             unsigned char operand1_related_byte2;
             if(address_mode == 0x3 || address_mode == 0x4){
-                string symbol_name = words[1];
-                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[1].substr(1);
-                SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
-                if(ste->defined == true){
-                    operand1_related_byte1 = (ste->offset>>8) & 0xFF;
-                    operand1_related_byte2 = (ste->offset) & 0xFF;
+                size_t potential_reg_ind = words[1].find('(');
+                int register_num = 10;
+                string potential_symbol = words[1];
+                if(potential_reg_ind != string::npos) {
+                    register_num = determineRegister(words[1]);
+                    potential_symbol = potential_symbol.substr(0, potential_reg_ind);
+                }
+                if(!isSymbol(potential_symbol)){
+                    short int literal = stoi(potential_symbol);
+                    operand1_related_byte1 = (literal>>8) & 0xFF;
+                    operand1_related_byte2 = literal & 0xFF;
                 }else{
-                    operand1_related_byte1 = 0;
-                    operand1_related_byte2 = 0;
-                } 
+                    string symbol_name = potential_symbol;
+                    if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
+                    if(ste->defined == true){
+                        operand1_related_byte1 = (ste->offset>>8) & 0xFF;
+                        operand1_related_byte2 = (ste->offset) & 0xFF;
+                    }else{
+                        operand1_related_byte1 = 0;
+                        operand1_related_byte2 = 0;
+                    } 
+                    dealWithRelocationRecord(symbol_name, register_num);
+                }
+
                 byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
 
@@ -203,8 +218,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     return byte_code;
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
-                    operand1_related_byte1 = literal & 0xFF00; 
-                    operand1_related_byte2 = literal & 0x00FF;
+                    operand1_related_byte1 = (literal>>8) & 0xFF; 
+                    operand1_related_byte2 = literal & 0xFF;
 
                     byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
@@ -252,15 +267,30 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             char operand1_related_byte1;
             char operand1_related_byte2;
             if(address_mode1 == 0x3 || address_mode1 == 0x4){
-                string symbol_name = words[1];
-                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[1].substr(1);
-                SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
-                if(ste->defined == true){
-                    operand1_related_byte1 = ste->offset & 0xFF00;
-                    operand1_related_byte2 = ste->offset & 0x00FF;
+                size_t potential_reg_ind = words[1].find('(');
+                int register_num = 10;
+                string potential_symbol = words[1];
+                if(potential_reg_ind != string::npos) {
+                    register_num = determineRegister(words[1]);
+                    potential_symbol = potential_symbol.substr(0, potential_reg_ind);
+                }
+                if(!isSymbol(potential_symbol)){
+                    short int literal = stoi(potential_symbol);
+                    operand1_related_byte1 = (literal>>8) & 0xFF;
+                    operand1_related_byte2 = literal & 0xFF;
                 }else{
-                    operand1_related_byte1 = 0;
-                    operand1_related_byte2 = 0;
+                    string symbol_name = potential_symbol;
+                    if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
+                    if(ste->defined == true){
+                        operand1_related_byte1 = (ste->offset>>8) & 0xFF;
+                        operand1_related_byte2 = ste->offset & 0xFF;
+                    }else{
+                        operand1_related_byte1 = 0;
+                        operand1_related_byte2 = 0;
+                    }
+
+                    dealWithRelocationRecord(symbol_name, register_num);
                 }
 
                 address_field_offset += 2;
@@ -276,8 +306,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     byte_code.push_back(operand1_related_byte1);
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
-                    operand1_related_byte1 = literal & 0xFF00; 
-                    operand1_related_byte2 = literal & 0x00FF;
+                    operand1_related_byte1 = (literal>>8) & 0xFF; 
+                    operand1_related_byte2 = literal & 0xFF;
 
                     address_field_offset += 2;
                     byte_code.push_back(operand1_related_byte1);
@@ -311,15 +341,31 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             char operand2_related_byte1;
             char operand2_related_byte2;
             if(address_mode2 == 0x3 || address_mode2 == 0x4){
-                string symbol_name = words[2];
-                if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = words[2].substr(1);
-                SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset);
-                if(ste->defined == true){
-                    operand2_related_byte1 = ste->offset & 0xFF00;
-                    operand2_related_byte2 = ste->offset & 0x00FF;
+                size_t potential_reg_ind = words[2].find('(');
+                int register_num = 10;
+                string potential_symbol = words[2];
+                if(potential_reg_ind != string::npos) {
+                    register_num = determineRegister(words[2]);
+                    potential_symbol = potential_symbol.substr(0, potential_reg_ind);
+                }
+
+                if(!isSymbol(potential_symbol)){
+                    short int literal = stoi(potential_symbol);
+                    operand1_related_byte1 = (literal>>8) & 0xFF;
+                    operand1_related_byte2 = literal & 0xFF;
                 }else{
-                    operand2_related_byte1 = 0;
-                    operand2_related_byte2 = 0;
+                    string symbol_name = potential_symbol;
+                    if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset);
+                    if(ste->defined == true){
+                        operand2_related_byte1 = (ste->offset>>8) & 0xFF;
+                        operand2_related_byte2 = ste->offset & 0xFF;
+                    }else{
+                        operand2_related_byte1 = 0;
+                        operand2_related_byte2 = 0;
+                    }
+
+                    dealWithRelocationRecord(symbol_name, register_num);
                 }
                 byte_code.push_back(operand2_related_byte1);
                 byte_code.push_back(operand2_related_byte2);
@@ -382,17 +428,24 @@ void Assembler::dealWithDirective(string directive){
 void Assembler::defineSymbol(string symbol, bool local, bool defined){
     SymbolTableEntry* found = st->findSymbol(symbol);
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, current_section->name, current_section->location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, current_section->name.substr(1), current_section->location_counter, local, defined)));
     else
     {
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
         found->offset = current_section->location_counter;
-        found->section = "";
+        found->section = current_section->name.substr(1);
     }
 }
 
 void Assembler::dealWithComment(string comment){
+}
+
+void Assembler::dealWithRelocationRecord(string symbol, int register_num){
+    string type = "R_386_16";
+    if(register_num == 7) type = "R_386_PC16";
+    int symb_id = st->findSymbol(symbol)->id;
+    current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter, symb_id, type)));
 }
 
 char Assembler::getAdressingMode(string operand, bool is_jump){
@@ -431,13 +484,14 @@ char Assembler::getAdressingMode(string operand, bool is_jump){
 int Assembler::determineRegister(string operand){
     int start = operand.find('%');
     if(start == string::npos) {
-        cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
-        return 16;
+        //cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
+        return 10;
     }
     string rgstr = operand.substr(start+1, 2);
+    if(rgstr == "pc") return 7;
     if(rgstr[0] != 'r') {
-        cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
-        return 16;
+        //cout<<"ERROR: REGISTER COULDNT BE FOUND IN OPERAND "<<operand<<endl;
+        return 10;
     }
     return rgstr[1]-'0';
 }
@@ -455,15 +509,15 @@ char Assembler::higherByteRegister(string operand){
 SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset){
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
-        st->addSymbol(*(new SymbolTableEntry(symbolName)));
+        st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1))));
         SymbolTableEntry* added = st->findSymbol(symbolName);
-        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name)));
+        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1))));
         return added;
     }else{
         if(found->defined == true){
             return found;
         }else{
-            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name)));
+            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1))));
             return found;
         }
     }
@@ -482,6 +536,7 @@ void Assembler::dealWithSection(string section_name){
     }
     current_section = new Section(section_name);
     sections.push_back(current_section);
+    st->addSymbol(*(new SymbolTableEntry(section_name, section_name.substr(1), 0, true, true)));
     return;
 }
 
@@ -506,5 +561,10 @@ map<string,int> Assembler::createMap()
   return m;
 }
 
+bool Assembler::isSymbol(string x){
+    return !all_of(x.begin(), x.end(), ::isdigit); // differentiating symbols and literals
+}
+
 void Assembler::end(){
+    cout<<st->toString();
 }
