@@ -6,8 +6,9 @@
 struct ForwardReferenceTableEntry{
     int size;
     int byte;
+    string section;
 
-    ForwardReferenceTableEntry(int b, int s = 2): byte(b), size(s){}
+    ForwardReferenceTableEntry(int b, string sec, int s = 2): byte(b), section(sec), size(s){}
 };
 
 struct SymbolTableEntry{
@@ -30,7 +31,7 @@ public:
 
     void addForwardReference(ForwardReferenceTableEntry frte);
 
-    void resolveSymbol(vector<char>* machine_code);
+    void resolveSymbol(vector<char>* machine_code, string section_name);
 };
 
 struct find_symbol : std::unary_function<SymbolTableEntry, bool> {
@@ -46,7 +47,7 @@ class SymbolTable{
         vector<SymbolTableEntry> table;
         SymbolTableEntry* findSymbol(string symbol);
         void addSymbol(SymbolTableEntry ste);
-        void backpatch(vector<char>* machine_code);
+        void backpatch(vector<char>& machine_code, string section_name);
 };
 
 #endif

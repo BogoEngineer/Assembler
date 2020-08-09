@@ -38,9 +38,8 @@ class Assembler{
         string input_file_name;
         string output_file_name;
         vector<string> assembly_code;
-        vector<Section> sections;
+        vector<Section*> sections;
         vector<Instruction> instruction_set;
-        int location_counter;
         int line_of_code;
         Section* current_section;
         map<string, int> directive_map;
@@ -61,7 +60,6 @@ class Assembler{
         static int determineRegister(string operand); // get register number if one is used from operand
         static char higherByteRegister(string operand); // is higher 8 or lower 8 bits used for register direct addressing mode: 0-lower, 1-higher
 
-        static string byteCodeToString(vector<char> byte_code);
         map<string, int> createMap();
         void end();
     public: 

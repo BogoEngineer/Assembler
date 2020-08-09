@@ -1,4 +1,5 @@
-  labela: #komentar labela  
+.section .text  
+labela: #komentar labela  
   nesto:
     push $255
         pop nes_drugo
@@ -15,9 +16,9 @@ ret
 list_byte_bss:  
 .byte 0b01110101, 0b1111110
   src: 
-labela1: neki izraz
+labela1: .word 10
 pop %r6 
-mov %r3, nesto
+mov %r3, svasta
 svasta:
 
 .end

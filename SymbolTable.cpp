@@ -11,28 +11,29 @@ SymbolTableEntry* SymbolTable::findSymbol(string symbol){
 
 void SymbolTable::addSymbol(SymbolTableEntry symbol){
     table.push_back(symbol);
-    cout<< "TABLE: "<<endl;
+    /*cout<< "TABLE: "<<endl;
     for(SymbolTableEntry ste: table){
         cout<<ste.name<< " "<<ste.offset<<endl;
-    }
+    }*/
 }
 
 void SymbolTableEntry::addForwardReference(ForwardReferenceTableEntry frte){
     forward_reference_table.push_back(frte);
 }
 
-void SymbolTableEntry::resolveSymbol(vector<char>* machine_code){
+void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_name){
     short int symbol = this->offset;
     for(ForwardReferenceTableEntry frte: forward_reference_table){
+        if(frte.section != section_name) continue;
         cout<<"PATCH: "<<frte.byte;
-        (*machine_code)[frte.byte + 2] =  (symbol & 0x00FF);
-        (*machine_code)[frte.byte + 1] = (symbol & 0xFF00)>>8;
+        (*machine_code)[frte.byte + 1] =  (char)(symbol & 0xFF);
+        (*machine_code)[frte.byte] = (char)(symbol & 0xFF00)>>8;
         cout<< " VALUE: "<< symbol<<endl;
     }
 }
 
-void SymbolTable::backpatch(vector<char>* machine_code){
+void SymbolTable::backpatch(vector<char>& machine_code, string section_name){
     for(SymbolTableEntry ste: table){
-        ste.resolveSymbol(machine_code);
+        ste.resolveSymbol(&machine_code, section_name);
     }
 }

@@ -7,7 +7,6 @@ Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
     output_file_name = ofn;
 
-    location_counter = 0;
     line_of_code = 0;
 
     st = new SymbolTable();
@@ -53,19 +52,21 @@ int Assembler::start(){
     for(string line: assembly_code){
         vector<char> processedLine = processOneLine(line);
         //machine_code.push_back(processedLine);
-        
-        current_section->machine_code.insert(current_section->machine_code.end(), processedLine.begin(), processedLine.end());
-        cout<<"byteCode: "<<byteCodeToString(processedLine)<<endl;
+
+        current_section->getMachineCode().insert(current_section->machine_code.end(), processedLine.begin(), processedLine.end());
     }
 
-    for(Section section: sections){
-        st->backpatch(&(section.machine_code));
+    for(Section* section: sections){
+        cout<<"SEC NAME: "<<section->name;
+        st->backpatch(section->machine_code, section->name);
     }
 
     cout<<"MACHINE CODE:"<<endl;
-    //cout<< byteCodeToString(machine_code);
-    cout<<"LOCATION COUNTER: "<<location_counter;
-
+    for(Section* s: sections){
+        cout<<"#"<<s->name<<endl;
+        cout<<s->getMachineCodeString()<<endl;
+    }
+    
     //fm->setContent(machine_code, output_file_name);
     return 0;
 }
@@ -77,6 +78,7 @@ vector<char> Assembler::processOneLine(string line){
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
+        if(current_section == nullptr) handleError("Can't have label outside of a section.");
         defineSymbol(to_process[0].substr(0, to_process[0].length()-1), true, true);
         lab = true;
     }
@@ -102,7 +104,9 @@ vector<char> Assembler::dealWithInstruction(string instruction){
         dealWithDirective(instruction.substr(1));
         return {}; // no byte code for object file
     }
+    if(current_section == nullptr) handleError("Can't have instruction outside of a section.");
     vector<string> words = tm->extractWords(instruction); 
+    //cout<<"INSTRUCTION: "<< words[0]<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
     /* 
@@ -127,16 +131,14 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     char instr_descr_byte = (inst->OC)<<3;
     vector<char> byte_code = {instr_descr_byte}; // array of bytes for object file ... up to 7 per instruction
     switch(inst->operand_number){
-        case 0:
+        case 0:{
             // size bit and unsused bits are 0, no need to do anything
-            cout<<inst->name<< " ";
             
-            location_counter += byte_code.size();
+            current_section->location_counter += byte_code.size();
             return byte_code;
             break;
-        case 1:
-        cout<<inst->name<< " ";
-        {
+        }
+        case 1: {
             bool is_jump = false;
             bool size_mask;
             if(words[0][0] == 'j' || words[0] == "int" || words[0] == "call") is_jump = true;
@@ -165,7 +167,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
 
             
             if(address_mode == 0x1 || address_mode == 0x2){
-                location_counter += byte_code.size();
+                current_section->location_counter += byte_code.size();
                 return byte_code; // there are no operand related bytes
             } 
             
@@ -187,7 +189,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
 
-                location_counter += byte_code.size();
+                current_section->location_counter += byte_code.size();
                 return byte_code;
             }
 
@@ -197,7 +199,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     operand1_related_byte1 = literal;
                     byte_code.push_back(operand1_related_byte1);
 
-                    location_counter += byte_code.size();
+                    current_section->location_counter += byte_code.size();
                     return byte_code;
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
@@ -207,15 +209,13 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
 
-                    location_counter += byte_code.size();
+                    current_section->location_counter += byte_code.size();
                     return byte_code;
                 }
             }
             break;
         }
-        case 2:
-        {
-            cout<<inst->name<< " ";
+        case 2:{
             bool size_mask;
             char address_mode1 = getAdressingMode(words[1], false);
             char address_mode2 = getAdressingMode(words[2], false);
@@ -304,7 +304,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             byte_code.push_back(op_descr_byte2);
 
             if(address_mode2 == 0x1 || address_mode2 == 0x2) {
-                location_counter += byte_code.size();
+                current_section->location_counter += byte_code.size();
                 return byte_code;    
             }
 
@@ -324,7 +324,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 byte_code.push_back(operand2_related_byte1);
                 byte_code.push_back(operand2_related_byte2);
 
-                location_counter += byte_code.size();
+                current_section->location_counter += byte_code.size();
                 return byte_code;
             }
 
@@ -334,7 +334,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     operand2_related_byte1 = literal;
                     byte_code.push_back(operand2_related_byte1);
 
-                    location_counter += byte_code.size();
+                    current_section->location_counter += byte_code.size();
                     return byte_code;
                 }else{
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
@@ -343,7 +343,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     byte_code.push_back(operand2_related_byte1);
                     byte_code.push_back(operand2_related_byte2);
 
-                    location_counter += byte_code.size();
+                    current_section->location_counter += byte_code.size();
                     return byte_code;
                 }
             }
@@ -355,11 +355,11 @@ vector<char> Assembler::dealWithInstruction(string instruction){
 
 void Assembler::dealWithDirective(string directive){
     vector<string> words = tm->extractWords(directive); 
+    if(directive_map.find(words[0]) == directive_map.end()) handleError("Directive does not exist.");
     switch (directive_map[words[0]])
     {
     case 0: // .section
         dealWithSection(words[1]);
-        location_counter = 0;
         break;
     case 1: // .equ
         break;
@@ -376,21 +376,18 @@ void Assembler::dealWithDirective(string directive){
         break;
     case 7: // .skip
         break;
-    default: // manual
-        handleError("Directive does not exist.");
-        break;
     }
 }
 
 void Assembler::defineSymbol(string symbol, bool local, bool defined){
     SymbolTableEntry* found = st->findSymbol(symbol);
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, current_section->name, location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, current_section->name, current_section->location_counter, local, defined)));
     else
     {
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
-        found->offset = location_counter;
+        found->offset = current_section->location_counter;
         found->section = "";
     }
 }
@@ -460,25 +457,16 @@ SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field
     if(found == nullptr){
         st->addSymbol(*(new SymbolTableEntry(symbolName)));
         SymbolTableEntry* added = st->findSymbol(symbolName);
-        added->addForwardReference(*(new ForwardReferenceTableEntry(location_counter + address_field_offset)));
+        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name)));
         return added;
     }else{
         if(found->defined == true){
             return found;
         }else{
-            found->addForwardReference(*(new ForwardReferenceTableEntry(location_counter)));
+            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name)));
             return found;
         }
     }
-}
-
-string Assembler::byteCodeToString(vector<char> byte_code){
-    std::stringstream ss;
-    for(unsigned char c: byte_code){
-        if((c & 0xF0) == 0x0) ss<<"0";
-        ss << std::hex << (int)c;
-    }
-    return ss.str();
 }
 
 string Assembler::handleError(string error){
@@ -493,13 +481,14 @@ void Assembler::dealWithSection(string section_name){
         return;
     }
     current_section = new Section(section_name);
-    sections.push_back(*current_section);
+    sections.push_back(current_section);
     return;
 }
 
-Section* Assembler::findSection(string section){
-    vector<Section>::iterator it = std::find_if(sections.begin(), sections.end(), find_section(section));
-    if(it != sections.end()) return it.base();
+Section* Assembler::findSection(string section_name){
+    for(Section* section: sections){
+        if(section->name == section_name) return section;
+    }
     return nullptr;
 }
 
@@ -517,4 +506,5 @@ map<string,int> Assembler::createMap()
   return m;
 }
 
-void Assembler::end(){}
+void Assembler::end(){
+}
