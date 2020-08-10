@@ -19,6 +19,7 @@ class Section{
         int location_counter;
 
         Section(string n);
+        ~Section();
 
         string getMachineCodeString();
         string getRelocationTable();

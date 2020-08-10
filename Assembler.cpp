@@ -2,6 +2,7 @@
 #include "INCLUDES.h"
 #include <algorithm>
 #include <map>
+#include <math.h>
 
 Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
@@ -56,18 +57,6 @@ int Assembler::start(){
 
         current_section->getMachineCode().insert(current_section->machine_code.end(), processedLine.begin(), processedLine.end());
     }
-
-    for(Section* section: sections){
-        st->backpatch(section->machine_code, section->name);
-    }
-
-    cout<<"MACHINE CODE:"<<endl;
-    for(Section* s: sections){
-        cout<<"#"<<s->name<<endl;
-        cout<<s->getMachineCodeString()<<endl;
-    }
-    
-    //fm->setContent(machine_code, output_file_name);
     return 0;
 }
 
@@ -411,17 +400,66 @@ void Assembler::dealWithDirective(string directive){
         break;
     case 2: // .end
         end();
+        exit(0);
         break;
     case 3: // .global
+        defineSymbol(words[1], false, false);
         break;
     case 4: // .extern
+        defineSymbol(words[1], false, false);
         break;
     case 5: // .byte
+        char byte;
+        for(int i=1; i<words.size(); i++){
+            byte = (char)getInt(words[i]);
+            current_section->getMachineCode().push_back(byte);
+        }
         break;
     case 6: // .word
+        short int word;
+        for(int i=1; i<words.size(); i++){
+            word = (short int)getInt(words[i]);
+            current_section->getMachineCode().push_back(word&0xFF);
+            current_section->getMachineCode().push_back((word>>8)&0xFF); // little endian
+        }
         break;
     case 7: // .skip
+        int num_of_bytes = getInt(words[1]);
+        for(int i = 0; i < num_of_bytes; i++){
+            current_section->getMachineCode().push_back(0);
+        }
         break;
+    }
+}
+
+int Assembler::getInt(string operand){
+    int ret=0;
+    if(operand[0]== '\''){
+        return operand[1];
+    }
+    else if(operand[0]=='0'){
+        if(operand[1] == 'b' || operand[1]=='B'){
+            string binary = operand.substr(2);
+            reverse(binary.begin(), binary.end());
+            for(int i=0; i<binary.size(); i++){
+                ret += (binary[i]-'0')*pow(2,i);
+            }
+        }
+        else if(operand[1]=='x' || operand[1]=='X'){
+            string hex = operand.substr(2);
+            return stoi(hex,0,16);
+        }
+        else {
+            string oct = operand.substr(1);
+            reverse(oct.begin(), oct.end());
+            for(int i=0; i<oct.size(); i++){
+                ret += (oct[i]-'0')*pow(8,i);
+            }
+        }
+        return ret;
+    }
+    else{
+        return stoi(operand);
     }
 }
 
@@ -566,5 +604,30 @@ bool Assembler::isSymbol(string x){
 }
 
 void Assembler::end(){
+    for(Section* section: sections){
+        st->backpatch(section->machine_code, section->name);
+        cout<<"#.ret"<<section->name<<endl;
+        cout<<section->getRelocationTable()<<endl;
+    }
+
     cout<<st->toString();
+
+
+    cout<<"MACHINE CODE:"<<endl;
+    for(Section* s: sections){
+        cout<<"#"<<s->name<<endl;
+        cout<<s->getMachineCodeString()<<endl;
+    }
+    
+    //fm->setContent(machine_code, output_file_name);
+}
+
+Assembler::~Assembler(){
+    delete st;
+    delete fm;
+    delete tm;
+    sections.clear();
+    instruction_set.clear();
+    delete current_section;
+    directive_map.clear();
 }

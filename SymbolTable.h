@@ -29,6 +29,10 @@ public:
         forward_reference_table = {};
     }
 
+    ~SymbolTableEntry(){
+        forward_reference_table.clear();
+    }
+
     void addForwardReference(ForwardReferenceTableEntry frte);
 
     void resolveSymbol(vector<char>* machine_code, string section_name);
@@ -49,6 +53,10 @@ class SymbolTable{
         void addSymbol(SymbolTableEntry ste);
         void backpatch(vector<char>& machine_code, string section_name);
         string toString();
+
+        ~SymbolTable(){
+            table.clear();
+        }
 };
 
 #endif

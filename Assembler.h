@@ -61,11 +61,13 @@ class Assembler{
         static int determineRegister(string operand); // get register number if one is used from operand
         static char higherByteRegister(string operand); // is higher 8 or lower 8 bits used for register direct addressing mode: 0-lower, 1-higher
 
+        int getInt(string operand);
         bool isSymbol(string x);
         map<string, int> createMap();
         void end();
     public: 
         Assembler(string ifn, string ofn);
+        ~Assembler();
         int start();
 };
 

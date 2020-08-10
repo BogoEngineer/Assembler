@@ -14,12 +14,14 @@ ret
 .section .bss
  
 list_byte_bss:  
-.byte 0b01110101, 0b1111110
+#.byte 0b01110101, 0b1111110, 0x2f, 0104, 115
   src: 
 labela1: .word 10
 pop 20(%pc) 
 mov $55, svasta
 and 50(%r2), svasta(%pc)
+.word 0xAA55, 12345, -1
+.skip 10
 svasta:
 
 .end
