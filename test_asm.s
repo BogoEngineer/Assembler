@@ -6,7 +6,7 @@ labela: #komentar labela
       jmp  *svasta
   labela5:   zez
 #jos jedan  
-.equ prvalabela, izraz
+.equ prvalabela, nesto
 
     kraj: halt
 ret

@@ -397,16 +397,78 @@ void Assembler::dealWithDirective(string directive){
         dealWithSection(words[1]);
         break;
     case 1: // .equ
+    {   
+        string symbol_name = words[1];
+        vector<IndexTableEntry> index_table = {};
+        UncomputableSymbolTableEntry* uste = new UncomputableSymbolTableEntry(symbol_name, index_table);
+        int offset = 0;
+        int sign=1; // 1 --> + | -1 --> -
+        bool last; // true --> symbol | false --> operator
+        vector<string> divided = divideEquOperands(words[2]);
+        for(int i = 0; i<divided.size(); i++){
+            if(divided[i] == "+"){
+                sign=1;
+                last = false;
+                continue;
+            }
+            else if(divided[i] == "-"){
+                sign = -1;
+                last = false;
+                continue;
+            }
+            else {
+                last = true;
+                if(isSymbol(divided[i])){
+                    SymbolTableEntry* found = st->findSymbol(divided[i]);
+                    if(found == nullptr) {
+                        st->addSymbol(*(new SymbolTableEntry(divided[i])));
+                        uste->needed_symbols.push_back(to_string(sign) + divided[i]);
+                        continue;
+                    }
+                    if(found->defined == false){
+                        uste->needed_symbols.push_back(to_string(sign) + divided[i]);
+                    }
+                    else{ 
+                        offset += sign*found->offset;
+                        vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(found->section));
+                        if(it != index_table.end()){
+                            index_table.push_back(*(new IndexTableEntry(found->section, sign)));
+                        }
+                        else{
+                            it.base()->value += sign;
+                        }
+                    }
+                }else{
+                    offset += getInt(divided[i]);
+                }
+            }
+        }
+        if(uste->needed_symbols.size() > 0){
+                uste->offset = offset;
+                ust.push_back(*uste);
+                st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name, 0, true, false)));
+        }else{
+            int num = 0;
+            for(IndexTableEntry ite: index_table){
+                if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
+                if(ite.value == 1 && num == 0) num = 1;
+                if(ite.value ==1 && num == 1) handleError("Illegal expression.");
+            }
+            st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name, offset, true, true)));
+        }
         break;
+    }
     case 2: // .end
+    {
         end();
         exit(0);
         break;
+    }
     case 3: // .global
         defineSymbol(words[1], false, false);
         break;
     case 4: // .extern
-        defineSymbol(words[1], false, false);
+        defineSymbol(words[1], false, false, true);
         break;
     case 5: // .byte
         char byte;
@@ -463,12 +525,13 @@ int Assembler::getInt(string operand){
     }
 }
 
-void Assembler::defineSymbol(string symbol, bool local, bool defined){
+void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext){
     SymbolTableEntry* found = st->findSymbol(symbol);
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, current_section->name.substr(1), current_section->location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, ext ? "UND" : current_section->name.substr(1), ext ? 0 : current_section->location_counter, local, defined)));
     else
     {
+        if(ext) handleError("Symbol is already declared as extern.");
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
         found->offset = current_section->location_counter;
@@ -604,6 +667,7 @@ bool Assembler::isSymbol(string x){
 }
 
 void Assembler::end(){
+    //resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
         cout<<"#.ret"<<section->name<<endl;
@@ -622,6 +686,39 @@ void Assembler::end(){
     //fm->setContent(machine_code, output_file_name);
 }
 
+vector<string> Assembler::divideEquOperands(string expression){
+    vector<string> ret = {};
+    if(expression[0]=='+' || expression[0]=='-'){
+        ret.push_back(string(1,expression[0]));
+        expression = expression.substr(1);
+    }
+    size_t next_operator_plus;
+    size_t next_operator_minus;
+    size_t next_operator;
+    while(1){
+        next_operator_plus = expression.find('+');
+        next_operator_minus = expression.find('-');
+        if(next_operator_plus == string::npos && next_operator_minus == string::npos){
+            next_operator = string::npos;
+            ret.push_back(expression);
+            break;
+        }
+        else if(next_operator_plus == string::npos && next_operator_minus != string::npos){
+            next_operator = next_operator_minus;
+        }
+        else if(next_operator_plus != string::npos && next_operator_minus == string::npos){
+            next_operator = next_operator_plus;
+        }
+        else{
+            next_operator = next_operator_minus > next_operator_plus ? next_operator_plus : next_operator_minus;
+        }
+        ret.push_back(expression.substr(0, next_operator));
+        ret.push_back(string(1, expression[next_operator]));
+        expression = expression.substr(next_operator+1);
+    }
+    return ret;
+}
+
 Assembler::~Assembler(){
     delete st;
     delete fm;
@@ -630,4 +727,50 @@ Assembler::~Assembler(){
     instruction_set.clear();
     delete current_section;
     directive_map.clear();
+}
+
+void Assembler::resolveUST(){
+    int last = ust.size();
+    //cout<<"LAST: "<<last<<endl;
+    while(ust.size()>0){
+        for(vector<UncomputableSymbolTableEntry>:: iterator iter = ust.begin(); iter != ust.end(); ++iter){
+            UncomputableSymbolTableEntry uste = *iter;
+            bool valid = true;
+            int offset = uste.offset;
+            vector<IndexTableEntry> index_table = uste.it;
+            for(vector<string>:: iterator itr = uste.needed_symbols.begin(); itr != uste.needed_symbols.end(); ++itr){
+                string symbol = *itr;
+                cout<<"NEEDED SYMBOL: "<<symbol<<endl;
+                int sign = symbol[0]-'0';
+                string symb = (sign == 1 ? symbol.substr(1) : symbol.substr(2));
+                SymbolTableEntry* found = st->findSymbol(symb);
+                if(found->defined == false) continue;
+                //uste.needed_symbols.erase(itr);
+                offset += sign*found->offset;
+                string section = found->section;
+                vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(section));
+                if(it != index_table.end()){
+                    it.base()->value += sign;
+                }    
+                else{
+                    index_table.push_back(*(new IndexTableEntry(found->section, sign)));
+                }
+            }
+            if(uste.needed_symbols.size() == 0){
+                int num = 0;
+                for(IndexTableEntry ite: index_table){
+                    if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
+                    if(ite.value == 1 && num == 0) num = 1;
+                    if(ite.value ==1 && num == 1) handleError("Illegal expression.");
+                }
+                SymbolTableEntry* left = st->findSymbol(uste.left_symbol);
+                left->defined = true;
+                left->offset = offset;
+                ust.erase(iter);
+            }
+        }
+        if(last == ust.size()) handleError("Cannot resolve .equ dependencies.");
+        last = ust.size();
+    }
+    //cout<<"ZAVRSIO I OVO"<<endl;
 }

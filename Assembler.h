@@ -7,6 +7,32 @@
 #include "Section.h"
 #include <map>
 
+struct IndexTableEntry{
+    string section;
+    int value;
+
+    IndexTableEntry(string s, int v=0):section(s),value(v){}
+};
+
+struct find_index_table_entry : std::unary_function<IndexTableEntry, bool> {
+    string section;
+    find_index_table_entry(string s):section(s) { }
+    bool operator()(IndexTableEntry const& i) const {
+        return i.section == section;
+    }
+};
+
+struct UncomputableSymbolTableEntry {
+    string left_symbol;
+    vector<string> needed_symbols;
+    vector<IndexTableEntry> it;
+    int offset;
+
+    UncomputableSymbolTableEntry(string l, vector<IndexTableEntry> i):left_symbol(l), it(i), offset(0){
+        needed_symbols = {};
+    }
+};
+
 struct Instruction{
     string name;
     int OC;
@@ -40,6 +66,7 @@ class Assembler{
         vector<string> assembly_code;
         vector<Section*> sections;
         vector<Instruction> instruction_set;
+        vector<UncomputableSymbolTableEntry> ust; // used for equ directives
         int line_of_code;
         Section* current_section;
         map<string, int> directive_map;
@@ -47,7 +74,7 @@ class Assembler{
         vector<char> processOneLine(string line); // one line assembly ==> one line binary
         vector<char> dealWithInstruction(string instruction); // recognize given instruction and return binary code for given instruction
         void dealWithDirective(string directive); // recognize given directive and do stuff
-        void defineSymbol(string symbol, bool local, bool defined); // symbol table etc.. logic
+        void defineSymbol(string symbol, bool local, bool defined, bool ext=false); // symbol table etc.. logic
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
         SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset); // deal with situation when symbol is found in a address field
         void dealWithSection(string section_name); // sets current section
@@ -65,6 +92,10 @@ class Assembler{
         bool isSymbol(string x);
         map<string, int> createMap();
         void end();
+
+        void resolveUST();
+
+        vector<string> divideEquOperands(string expression);
     public: 
         Assembler(string ifn, string ofn);
         ~Assembler();
