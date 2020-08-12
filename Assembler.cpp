@@ -431,7 +431,7 @@ void Assembler::dealWithDirective(string directive){
                     else{ 
                         offset += sign*found->offset;
                         vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(found->section));
-                        if(it != index_table.end()){
+                        if(it == index_table.end()){
                             index_table.push_back(*(new IndexTableEntry(found->section, sign)));
                         }
                         else{
@@ -445,16 +445,32 @@ void Assembler::dealWithDirective(string directive){
         }
         if(uste->needed_symbols.size() > 0){
                 uste->offset = offset;
+                uste->it = index_table;
                 ust.push_back(*uste);
-                st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name, 0, true, false)));
+                SymbolTableEntry* found = st->findSymbol(symbol_name);
+                if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name.substr(1), offset, true, false)));
+                else{
+                    found->section = current_section->name.substr(1);
+                    found->offset = offset;
+                    found->local = true;
+                    found->defined = false;
+                }
         }else{
             int num = 0;
             for(IndexTableEntry ite: index_table){
                 if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
                 if(ite.value == 1 && num == 0) num = 1;
-                if(ite.value ==1 && num == 1) handleError("Illegal expression.");
+                else if(ite.value ==1 && num == 1) handleError("Illegal expression.");
             }
-            st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name, offset, true, true)));
+            SymbolTableEntry* found = st->findSymbol(symbol_name);
+            if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name.substr(1), offset, true, true)));
+            else{
+                found->section = current_section->name.substr(1);
+                found->offset = offset;
+                found->local = true;
+                found->defined = true;
+            }
+            if(num != 0) dealWithRelocationRecord(symbol_name);
         }
         break;
     }
@@ -542,11 +558,17 @@ void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext){
 void Assembler::dealWithComment(string comment){
 }
 
-void Assembler::dealWithRelocationRecord(string symbol, int register_num){
+void Assembler::dealWithRelocationRecord(string symbol, int register_num/*=10*/, string section/*=""*/){
+    bool null_flag = false;
+    if(current_section == nullptr) {
+        current_section = findSection("."+section);
+        null_flag = true;
+    }
     string type = "R_386_16";
     if(register_num == 7) type = "R_386_PC16";
     int symb_id = st->findSymbol(symbol)->id;
     current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter, symb_id, type)));
+    if(null_flag) current_section = nullptr;
 }
 
 char Assembler::getAdressingMode(string operand, bool is_jump){
@@ -667,7 +689,8 @@ bool Assembler::isSymbol(string x){
 }
 
 void Assembler::end(){
-    //resolveUST();
+    current_section = nullptr;
+    resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
         cout<<"#.ret"<<section->name<<endl;
@@ -725,7 +748,9 @@ Assembler::~Assembler(){
     delete tm;
     sections.clear();
     instruction_set.clear();
-    delete current_section;
+    for(Section* section: sections){
+        delete section;
+    }
     directive_map.clear();
 }
 
@@ -733,19 +758,22 @@ void Assembler::resolveUST(){
     int last = ust.size();
     //cout<<"LAST: "<<last<<endl;
     while(ust.size()>0){
-        for(vector<UncomputableSymbolTableEntry>:: iterator iter = ust.begin(); iter != ust.end(); ++iter){
+        for(vector<UncomputableSymbolTableEntry>:: iterator iter = ust.begin(); iter != ust.end();){
             UncomputableSymbolTableEntry uste = *iter;
             bool valid = true;
             int offset = uste.offset;
             vector<IndexTableEntry> index_table = uste.it;
-            for(vector<string>:: iterator itr = uste.needed_symbols.begin(); itr != uste.needed_symbols.end(); ++itr){
+            //int needed_symbols_resolved_count = 0;
+            for(vector<string>:: iterator itr = uste.needed_symbols.begin(); itr != uste.needed_symbols.end();){
                 string symbol = *itr;
-                cout<<"NEEDED SYMBOL: "<<symbol<<endl;
-                int sign = symbol[0]-'0';
+                int sign = symbol[0]=='1'? 1 : -1;
                 string symb = (sign == 1 ? symbol.substr(1) : symbol.substr(2));
                 SymbolTableEntry* found = st->findSymbol(symb);
-                if(found->defined == false) continue;
-                //uste.needed_symbols.erase(itr);
+                if(found->defined == false) {
+                    itr++;
+                    continue;
+                }
+                itr = uste.needed_symbols.erase(itr);
                 offset += sign*found->offset;
                 string section = found->section;
                 vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(section));
@@ -761,16 +789,16 @@ void Assembler::resolveUST(){
                 for(IndexTableEntry ite: index_table){
                     if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
                     if(ite.value == 1 && num == 0) num = 1;
-                    if(ite.value ==1 && num == 1) handleError("Illegal expression.");
+                    else if(ite.value ==1 && num == 1) handleError("Illegal expression.");
                 }
                 SymbolTableEntry* left = st->findSymbol(uste.left_symbol);
                 left->defined = true;
                 left->offset = offset;
-                ust.erase(iter);
-            }
+                if(num != 0) dealWithRelocationRecord(uste.left_symbol, 10, left->section);
+                iter = ust.erase(iter);
+            }else { iter++; }
         }
         if(last == ust.size()) handleError("Cannot resolve .equ dependencies.");
         last = ust.size();
     }
-    //cout<<"ZAVRSIO I OVO"<<endl;
 }

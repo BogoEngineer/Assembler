@@ -78,7 +78,7 @@ class Assembler{
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
         SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset); // deal with situation when symbol is found in a address field
         void dealWithSection(string section_name); // sets current section
-        void dealWithRelocationRecord(string symbol, int reg_num); // will be called after dealing with a symbol inside of an instruction
+        void dealWithRelocationRecord(string symbol, int reg_num=10, string section=""); // will be called after dealing with a symbol inside of an instruction
 
         Section* findSection(string section); // finds section with given name
 

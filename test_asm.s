@@ -6,8 +6,10 @@ labela: #komentar labela
       jmp  *svasta
   labela5:   zez
 #jos jedan  
-.equ prvalabela, nesto
-
+.equ prvalabela, svasta-svasta+labela5
+.equ a, b
+.equ b, c
+.equ c, 10
     kraj: halt
 ret
 #komentarilic
