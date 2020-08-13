@@ -1,10 +1,10 @@
 .section .text  
 labela: #komentar labela  
   nesto:
-    push $255
+    pushb $255
         pop nes_drugo
       jmp  *svasta
-  labela5:   zez
+  labela5:
 #jos jedan  
 .equ prvalabela, svasta-svasta+labela5
 .equ a, b
@@ -20,7 +20,7 @@ list_byte_bss:
   src: 
 labela1: .word 10
 pop 20(%pc) 
-mov $55, svasta
+movb $55, svasta
 and 50(%r2), svasta(%pc)
 .word 0xAA55, 12345, -1
 .skip 10

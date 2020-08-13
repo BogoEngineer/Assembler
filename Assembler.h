@@ -44,7 +44,7 @@ struct find_instruction : std::unary_function<Instruction, bool> {
     string name;
     find_instruction(string n):name(n) { }
     bool operator()(Instruction const& i) const {
-        return i.name == name;
+        return name.find(i.name) != string::npos;
     }
 };
 

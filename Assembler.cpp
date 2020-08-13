@@ -98,6 +98,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     //cout<<"INSTRUCTION: "<< words[0]<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
+
     /* 
         Structure of instruction:
         Instruction Description byte: OC4|OC3|OC2|OC1|OC0|S|Un|Un
@@ -118,7 +119,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             L/H - lower or higher byte is used in case of register direct addressing mode for operand with size of 1 byte
     */
     char instr_descr_byte = (inst->OC)<<3;
-    vector<char> byte_code = {instr_descr_byte}; // array of bytes for object file ... up to 7 per instruction
+    vector<char> byte_code = {}; // array of bytes for object file ... up to 7 per instruction
     switch(inst->operand_number){
         case 0:{
             // size bit and unsused bits are 0, no need to do anything
@@ -129,12 +130,17 @@ vector<char> Assembler::dealWithInstruction(string instruction){
         }
         case 1: {
             bool is_jump = false;
-            bool size_mask;
+            int size_mask = 1; // word is default
             if(words[0][0] == 'j' || words[0] == "int" || words[0] == "call") is_jump = true;
             char address_mode = getAdressingMode(words[1], is_jump);
-            if(address_mode == 0x0 || address_mode == 0x1) size_mask = 1;
-            else if(address_mode == 0x2 || address_mode == 0x3 || address_mode == 0x4) size_mask = 0;
-            instr_descr_byte |= size_mask<<2;
+            /*if(address_mode == 0x0 || address_mode == 0x1) size_mask = 1;
+            else if(address_mode == 0x2 || address_mode == 0x3 || address_mode == 0x4) size_mask = 0;*/
+            
+            if(words[0].size() > inst->name.size() && words[0][words[0].size()-1]=='b') size_mask = 0;
+            size_mask = (size_mask <<2);
+            instr_descr_byte |= size_mask;
+            byte_code.push_back(instr_descr_byte);
+
             if(words[0] == "pop" && address_mode == 0x0) handleError("Immediate addressing mode with destination operand is prohibited.");
             
             // op descr byte
@@ -225,9 +231,13 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             char address_mode2 = getAdressingMode(words[2], false);
             if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test")) handleError("Immediate addressing mode with destination operand is prohibited.");
             char addres_mode = (address_mode1 > address_mode2) ? address_mode1 : address_mode2;
-            if(address_mode1 == 0x0 || address_mode1 == 0x1) size_mask = 1;
-            else if(address_mode1 == 0x2 || address_mode1 == 0x3 || address_mode1 == 0x4) size_mask = 0;
+            /*if(address_mode1 == 0x0 || address_mode1 == 0x1) size_mask = 1;
+            else if(address_mode1 == 0x2 || address_mode1 == 0x3 || address_mode1 == 0x4) size_mask = 0;*/
+
+            if(words[0].size() > inst->name.size() && words[0][words[0].size()-1]=='b') size_mask = 0;
+
             instr_descr_byte |= size_mask<<2;
+            byte_code.push_back(instr_descr_byte);
 
             // operand bytes
 
