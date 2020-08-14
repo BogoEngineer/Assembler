@@ -18,15 +18,14 @@ vector<string> FileManager::getContent(string fname){
     return content;
 }
 
-void FileManager::setContent(vector<string> content, string fname){
+void FileManager::setContent(string output, string fname){
     this->content = content;
     file.open(fname, ios::in | ios::out);
     if(file.is_open()==false){
         cout<<"File "<<fname<< " cannot be oppened"<<endl;
+        exit(1);
         return;
     }
-    for(string n: content){
-        file<<n + "\n";
-    }
+    file << output;
     file.close();
 }

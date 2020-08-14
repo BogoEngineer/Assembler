@@ -1,3 +1,6 @@
+
+.extern dva,  tri
+
 .section .text  
 labela: #komentar labela  
   nesto:
@@ -6,7 +9,7 @@ labela: #komentar labela
       jmp  *svasta
   labela5:
 #jos jedan  
-.equ prvalabela, svasta-svasta+labela5
+.equ prvalabela, svasta-svasta+dva
 .equ a, b
 .equ b, c
 .equ c, 10

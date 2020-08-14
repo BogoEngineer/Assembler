@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <map>
 #include <math.h>
+#include <sstream>
 
 Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
@@ -54,7 +55,7 @@ int Assembler::start(){
         
         vector<char> processedLine = processOneLine(line);
         //machine_code.push_back(processedLine);
-
+        if(processedLine.size() == 0) continue;
         current_section->getMachineCode().insert(current_section->machine_code.end(), processedLine.begin(), processedLine.end());
     }
     return 0;
@@ -98,7 +99,6 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     //cout<<"INSTRUCTION: "<< words[0]<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
-
     /* 
         Structure of instruction:
         Instruction Description byte: OC4|OC3|OC2|OC1|OC0|S|Un|Un
@@ -436,7 +436,16 @@ void Assembler::dealWithDirective(string directive){
                         continue;
                     }
                     if(found->defined == false){
-                        uste->needed_symbols.push_back(to_string(sign) + divided[i]);
+                        if(found->section == "UND"){ // always add +1 on extern symbols regardless of sign
+                            vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(found->section));
+                            if(it == index_table.end()){
+                                index_table.push_back(*(new IndexTableEntry(found->section, 1)));
+                            }
+                            else{
+                                it.base()->value += 1;
+                            }
+                        }
+                        else {uste->needed_symbols.push_back(to_string(sign) + divided[i]);}
                     }
                     else{ 
                         offset += sign*found->offset;
@@ -491,10 +500,10 @@ void Assembler::dealWithDirective(string directive){
         break;
     }
     case 3: // .global
-        defineSymbol(words[1], false, false);
+        for(int i = 1; i < words.size(); i++) defineSymbol(words[i], false, false);
         break;
     case 4: // .extern
-        defineSymbol(words[1], false, false, true);
+        for(int i = 1; i < words.size(); i++) defineSymbol(words[i], false, false, true);
         break;
     case 5: // .byte
         char byte;
@@ -557,7 +566,7 @@ void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext){
     (*(new SymbolTableEntry(symbol, ext ? "UND" : current_section->name.substr(1), ext ? 0 : current_section->location_counter, local, defined)));
     else
     {
-        if(ext) handleError("Symbol is already declared as extern.");
+        if(found->section == "UND") handleError("Symbol " + found->name + " is already declared as extern.");
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
         found->offset = current_section->location_counter;
@@ -657,7 +666,7 @@ SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field
 }
 
 string Assembler::handleError(string error){
-    cout<<error<<endl;
+    cout<<error + " On line:" + to_string(line_of_code)<<endl;
     abort();
 }
 
@@ -699,7 +708,8 @@ bool Assembler::isSymbol(string x){
 }
 
 void Assembler::end(){
-    current_section = nullptr;
+    // FOR TESTING
+    /*current_section = nullptr;
     resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
@@ -714,9 +724,28 @@ void Assembler::end(){
     for(Section* s: sections){
         cout<<"#"<<s->name<<endl;
         cout<<s->getMachineCodeString()<<endl;
+    }*/
+
+    // FINAL
+    stringstream output;
+    current_section = nullptr;
+    resolveUST();
+    for(Section* section: sections){
+        st->backpatch(section->machine_code, section->name);
+        output<<"#.ret"<<section->name<<endl;
+        output<<section->getRelocationTable()<<endl;
+    }
+
+    output<<st->toString();
+
+
+    output<<"MACHINE CODE:"<<endl;
+    for(Section* s: sections){
+        output<<"#"<<s->name<<endl;
+        output<<s->getMachineCodeString()<<endl;
     }
     
-    //fm->setContent(machine_code, output_file_name);
+    fm->setContent(output.str(), output_file_name);
 }
 
 vector<string> Assembler::divideEquOperands(string expression){

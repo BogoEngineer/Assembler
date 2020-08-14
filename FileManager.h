@@ -15,7 +15,7 @@ class FileManager{
     public:
         FileManager();
         vector<string> getContent(string fname);
-        void setContent(vector<string> content, string fname);
+        void setContent(string output, string fname);
 };
 
 #endif
