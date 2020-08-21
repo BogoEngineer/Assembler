@@ -185,10 +185,11 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
-                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, register_num==7 ? -2 : 0); // covering for pcrel also
                     if(ste->defined == true){
-                        operand1_related_byte1 = (ste->offset>>8) & 0xFF;
-                        operand1_related_byte2 = (ste->offset) & 0xFF;
+                        int off = ste->offset + (register_num==7 ? -2 : 0);
+                        operand1_related_byte1 = ((off>>8) & 0xFF);
+                        operand1_related_byte2 = ((off) & 0xFF);
                     }else{
                         operand1_related_byte1 = 0;
                         operand1_related_byte2 = 0;
@@ -265,6 +266,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             
             char operand1_related_byte1;
             char operand1_related_byte2;
+
             if(address_mode1 == 0x3 || address_mode1 == 0x4){
                 size_t potential_reg_ind = words[1].find('(');
                 int register_num = 10;
@@ -280,10 +282,23 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
-                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
+                    SymbolTableEntry* ste;
+                    if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -5);
+                    else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -3);
+                    else SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
                     if(ste->defined == true){
-                        operand1_related_byte1 = (ste->offset>>8) & 0xFF;
-                        operand1_related_byte2 = ste->offset & 0xFF;
+                        if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) {
+                            operand1_related_byte1 = ((ste->offset-5)>>8) & 0xFF;
+                            operand1_related_byte2 = (ste->offset-5) & 0xFF;
+                        }
+                        else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) {
+                            operand1_related_byte1 = ((ste->offset-3)>>8) & 0xFF;
+                            operand1_related_byte2 = (ste->offset-3) & 0xFF;
+                        }
+                        else{
+                            operand1_related_byte1 = (ste->offset>>8) & 0xFF;
+                            operand1_related_byte2 = ste->offset & 0xFF;
+                        }
                     }else{
                         operand1_related_byte1 = 0;
                         operand1_related_byte2 = 0;
@@ -355,10 +370,11 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
-                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset, register_num==7 ? -2:0);
                     if(ste->defined == true){
-                        operand2_related_byte1 = (ste->offset>>8) & 0xFF;
-                        operand2_related_byte2 = ste->offset & 0xFF;
+                        int off = ste->offset + (register_num==7 ? -2:0);
+                        operand2_related_byte1 = (off>>8) & 0xFF;
+                        operand2_related_byte2 = (off) & 0xFF;
                     }else{
                         operand2_related_byte1 = 0;
                         operand2_related_byte2 = 0;
@@ -583,8 +599,8 @@ void Assembler::dealWithRelocationRecord(string symbol, int register_num/*=10*/,
         current_section = findSection("."+section);
         null_flag = true;
     }
-    string type = "R_386_16";
-    if(register_num == 7) type = "R_386_PC16";
+    string type = "R_386_32";
+    if(register_num == 7) type = "R_386_PC32";
     int symb_id = st->findSymbol(symbol)->id;
     current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter, symb_id, type)));
     if(null_flag) current_section = nullptr;
@@ -648,18 +664,18 @@ char Assembler::higherByteRegister(string operand){
     return rgstr[2] == 'h' ? 1 : 0;
 }
 
-SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset){
+SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction/*=0*/){
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
         st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1))));
         SymbolTableEntry* added = st->findSymbol(symbolName);
-        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1))));
+        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1), end_of_instruction)));
         return added;
     }else{
         if(found->defined == true){
             return found;
         }else{
-            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1))));
+            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1), end_of_instruction)));
             return found;
         }
     }

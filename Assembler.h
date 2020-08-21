@@ -76,7 +76,7 @@ class Assembler{
         void dealWithDirective(string directive); // recognize given directive and do stuff
         void defineSymbol(string symbol, bool local, bool defined, bool ext=false); // symbol table etc.. logic
         void dealWithComment(string comment); // probably ignore given comment, needed for testing
-        SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset); // deal with situation when symbol is found in a address field
+        SymbolTableEntry* dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction=0); // deal with situation when symbol is found in a address field
         void dealWithSection(string section_name); // sets current section
         void dealWithRelocationRecord(string symbol, int reg_num=10, string section=""); // will be called after dealing with a symbol inside of an instruction
 

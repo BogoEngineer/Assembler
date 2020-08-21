@@ -52,7 +52,6 @@ string prd1(const string x, const int decDigits, const int width) {
 
 string Section::getRelocationTable(){
     stringstream ss;
-    ss<< "#SYMBOL TABLE: "<<endl;
     ss  << center1("offset", 15)<< " | "
         << center1("type", 10)<< " | "
         << center1("value", 10)<<endl;

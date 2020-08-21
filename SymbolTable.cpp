@@ -24,8 +24,8 @@ void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_
         if(frte.section != section_name.substr(1)) continue;
         //cout<<"SYMBOL: "<<this->name;
         //cout<<" PATCH: "<<frte.byte;
-        (*machine_code)[frte.byte + 1] =  symbol & 0xFF;
-        (*machine_code)[frte.byte] = (symbol>>8) & 0xFF;
+        (*machine_code)[frte.byte + 1] =  (symbol+frte.pcrel) & 0xFF;
+        (*machine_code)[frte.byte] = ((symbol+frte.pcrel)>>8) & 0xFF;
         //cout<< " VALUE: "<< symbol<<endl;
     }
 }
@@ -33,6 +33,10 @@ void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_
 void SymbolTable::backpatch(vector<char>& machine_code, string section_name){
     //cout<<"SECTION: "<<section_name;
     for(SymbolTableEntry ste: table){
+        if(ste.defined == false && ste.local == true) {
+            cout<<"Could not resolve symbol: "<<ste.name<<endl;
+            exit(1);
+        }
         ste.resolveSymbol(&machine_code, section_name);
     }
 }
