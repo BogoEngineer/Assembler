@@ -84,7 +84,7 @@ class Assembler{
 
         string handleError(string error); // maybe create some error table and then return int as a code to take a specific message for output
 
-        static char getAdressingMode(string operand, bool is_jump); // get addressing mode for operand
+        char getAdressingMode(string operand, bool is_jump); // get addressing mode for operand
         static int determineRegister(string operand); // get register number if one is used from operand
         static char higherByteRegister(string operand); // is higher 8 or lower 8 bits used for register direct addressing mode: 0-lower, 1-higher
 

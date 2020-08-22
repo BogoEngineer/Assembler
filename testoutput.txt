@@ -1,39 +1,43 @@
-#.ret.text
-#SYMBOL TABLE: 
+#.ret.data
     offset      |    type    |   value   
-              3 |   R_386_16 |          5
-              7 |   R_386_16 |          6
-             11 |   R_386_16 |          8
-             11 |   R_386_16 |          9
-             11 |   R_386_16 |         10
+              7 |   R_386_16 |          7
+              9 |   R_386_16 |          2
+             11 |   R_386_16 |          1
+
+#.ret.text
+    offset      |    type    |   value   
+              0 |   R_386_16 |          4
+              5 |   R_386_16 |          7
+             20 | R_386_PC16 |         12
+             29 |   R_386_16 |         13
+             33 |   R_386_16 |         11
+             45 |   R_386_16 |          8
+             57 |   R_386_16 |          8
 
 #.ret.bss
-#SYMBOL TABLE: 
     offset      |    type    |   value   
-              4 |   R_386_16 |          6
-             10 | R_386_PC16 |          6
 
 #SYMBOL TABLE: 
      name       |  section   |   offset   |   local    |    id    
-            dva |        UND |          0 |          g |          0
-            tri |        UND |          0 |          g |          1
-          .text |       text |          0 |          l |          2
-         labela |       text |          0 |          l |          3
-          nesto |       text |          0 |          l |          4
-      nes_drugo |       text |          0 |          g |          5
-         svasta |        bss |         17 |          g |          6
-        labela5 |       text |         11 |          l |          7
-     prvalabela |       text |          0 |          l |          8
-              b |       text |         10 |          l |          9
-              a |       text |         10 |          l |         10
-              c |       text |         10 |          l |         11
-           kraj |       text |         11 |          l |         12
-           .bss |        bss |          0 |          l |         13
-  list_byte_bss |        bss |          0 |          l |         14
-            src |        bss |          0 |          l |         15
-        labela1 |        bss |          0 |          l |         16
+                |        UND |          0 |          g |          0
+             x1 |        UND |          0 |          g |          1
+             g1 |       data |          5 |          g |          2
+          .data |       data |          0 |          l |          3
+             s1 |       data |          5 |          l |          4
+             s2 |       data |          5 |          l |          5
+             s3 |       data |          5 |          l |          6
+             s5 |       data |         25 |          g |          7
+             s4 |       data |         13 |          l |          8
+            res |       data |         26 |          l |          9
+          .text |       text |          0 |          l |         10
+         repeat |       text |          5 |          l |         11
+           end1 |       text |         52 |          g |         12
+           end0 |       text |         40 |          g |         13
+           .bss |        bss |          0 |          l |         14
 MACHINE CODE:
+#.data
+000000000064000500aaaa00000000000000000000ff00
 #.text
-4814ff549400002c940011
+e094000020f094000020f014000120e820140001446e0032e82014000044940028e0940000222c22e014000020e014000060000de014000020e014000160000d
 #.bss
-0a00546e0014601400110000bc64000011000055aa3930ffff00000000000000000000
+00000000000000000000

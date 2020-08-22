@@ -14,7 +14,8 @@ Assembler::Assembler(string ifn, string ofn){
     st = new SymbolTable();
     fm = new FileManager();
     tm = new TextManipulator();
-    current_section = nullptr;
+    current_section = new Section("UND"); // default "empty" section for globals without definition or externs
+    st->addSymbol(*(new SymbolTableEntry("", "UND")));
     
     sections = {};
 
@@ -65,6 +66,7 @@ vector<char> Assembler::processOneLine(string line){
     line_of_code += 1;
     // Line recognition - section/instruction/label
     if(tm->isEmpty(line)) return {};
+    if(line.find(':')!= string::npos) line.replace(line.find(':')+1, 1, line[line.find(':')+1]=='.' ? " ." : " ");
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
@@ -94,9 +96,11 @@ vector<char> Assembler::dealWithInstruction(string instruction){
         dealWithDirective(instruction.substr(1));
         return {}; // no byte code for object file
     }
-    if(current_section == nullptr) handleError("Can't have instruction outside of a section.");
+    //if(current_section == nullptr) handleError("Can't have instruction outside of a section.");
+    if(current_section->name == "UND") handleError("Can't have instruction outside of a section.");
     vector<string> words = tm->extractWords(instruction); 
     //cout<<"INSTRUCTION: "<< words[0]<<endl;
+    //cout<<"SECTION: "<<current_section->name<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
     /* 
@@ -137,6 +141,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             else if(address_mode == 0x2 || address_mode == 0x3 || address_mode == 0x4) size_mask = 0;*/
             
             if(words[0].size() > inst->name.size() && words[0][words[0].size()-1]=='b') size_mask = 0;
+            cout<<"SIZE: "<<size_mask<<endl;
             size_mask = (size_mask <<2);
             instr_descr_byte |= size_mask;
             byte_code.push_back(instr_descr_byte);
@@ -179,7 +184,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     potential_symbol = potential_symbol.substr(0, potential_reg_ind);
                 }
                 if(!isSymbol(potential_symbol)){
-                    short int literal = stoi(potential_symbol);
+                    short int literal = getInt(potential_symbol);
                     operand1_related_byte1 = (literal>>8) & 0xFF;
                     operand1_related_byte2 = literal & 0xFF;
                 }else{
@@ -205,7 +210,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode == 0x0){
-                short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
+                short literal = getInt(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
                     byte_code.push_back(operand1_related_byte1);
@@ -276,7 +281,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     potential_symbol = potential_symbol.substr(0, potential_reg_ind);
                 }
                 if(!isSymbol(potential_symbol)){
-                    short int literal = stoi(potential_symbol);
+                    short int literal = getInt(potential_symbol);
                     operand1_related_byte1 = (literal>>8) & 0xFF;
                     operand1_related_byte2 = literal & 0xFF;
                 }else{
@@ -313,7 +318,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode1 == 0x0){
-                short literal = stoi(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
+                short literal = getInt(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
                     address_field_offset += 1;
@@ -364,7 +369,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }
 
                 if(!isSymbol(potential_symbol)){
-                    short int literal = stoi(potential_symbol);
+                    short int literal = getInt(potential_symbol);
                     operand1_related_byte1 = (literal>>8) & 0xFF;
                     operand1_related_byte2 = literal & 0xFF;
                 }else{
@@ -390,7 +395,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode2 == 0x0){
-                short literal = stoi(words[2].find('$') == string::npos ? words[2] : words[2].substr(1));
+                short literal = getInt(words[2].find('$') == string::npos ? words[2] : words[2].substr(1));
                 if(size_mask == 0){ 
                     operand2_related_byte1 = literal;
                     byte_code.push_back(operand2_related_byte1);
@@ -415,6 +420,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
 }
 
 void Assembler::dealWithDirective(string directive){
+    //cout<<"DIRECTIVE: "<<directive<<endl;
     vector<string> words = tm->extractWords(directive); 
     if(directive_map.find(words[0]) == directive_map.end()) handleError("Directive does not exist.");
     switch (directive_map[words[0]])
@@ -522,24 +528,64 @@ void Assembler::dealWithDirective(string directive){
         for(int i = 1; i < words.size(); i++) defineSymbol(words[i], false, false, true);
         break;
     case 5: // .byte
+    {
         char byte;
         for(int i=1; i<words.size(); i++){
-            byte = (char)getInt(words[i]);
-            current_section->getMachineCode().push_back(byte);
+            if(isSymbol(words[i])){
+                cout<<"WORDS: "<<words[i]<<endl;
+                SymbolTableEntry* found = st->findSymbol(words[i]);
+                if(found == nullptr){
+                    st->addSymbol(*(new SymbolTableEntry(words[i])));
+                    SymbolTableEntry* added = st->findSymbol(words[i]);
+                    added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name.substr(1))));
+                }else{
+                    if(found->defined != false){
+                        current_section->getMachineCode().push_back(found->offset & 0xFF);
+                        found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name.substr(1))));
+                    }
+                }
+
+                dealWithRelocationRecord(words[i]);
+            }
+            else{
+                byte = (char)getInt(words[i]);
+                current_section->getMachineCode().push_back(byte);
+            }
+            current_section->location_counter += 1;
         }
         break;
+        }
     case 6: // .word
+    {
         short int word;
         for(int i=1; i<words.size(); i++){
-            word = (short int)getInt(words[i]);
-            current_section->getMachineCode().push_back(word&0xFF);
-            current_section->getMachineCode().push_back((word>>8)&0xFF); // little endian
+            if(isSymbol(words[i])){
+                SymbolTableEntry* found = st->findSymbol(words[i]);
+                if(found == nullptr){
+                    st->addSymbol(*(new SymbolTableEntry(words[i])));
+                }else{
+                    if(found->defined != false){
+                        current_section->getMachineCode().push_back(found->offset & 0xFF);
+                        current_section->getMachineCode().push_back((found->offset>>8) & 0xFF);
+                    }
+                }
+
+                dealWithRelocationRecord(words[i]);
+            }
+            else{
+                word = (short int)getInt(words[i]);
+                current_section->getMachineCode().push_back(word&0xFF);
+                current_section->getMachineCode().push_back((word>>8)&0xFF); // little endian
+            }
+            current_section->location_counter += 2;
         }
         break;
+    }
     case 7: // .skip
         int num_of_bytes = getInt(words[1]);
         for(int i = 0; i < num_of_bytes; i++){
             current_section->getMachineCode().push_back(0);
+            current_section->location_counter += 1;
         }
         break;
     }
@@ -576,7 +622,7 @@ int Assembler::getInt(string operand){
     }
 }
 
-void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext){
+void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext/*=false*/){
     SymbolTableEntry* found = st->findSymbol(symbol);
     if(found == nullptr) st->addSymbol
     (*(new SymbolTableEntry(symbol, ext ? "UND" : current_section->name.substr(1), ext ? 0 : current_section->location_counter, local, defined)));
@@ -594,13 +640,14 @@ void Assembler::dealWithComment(string comment){
 }
 
 void Assembler::dealWithRelocationRecord(string symbol, int register_num/*=10*/, string section/*=""*/){
+    //cout<<"RELOC FOR: "<<symbol<<" IN SECTION:" << current_section->name<<endl;
     bool null_flag = false;
     if(current_section == nullptr) {
         current_section = findSection("."+section);
         null_flag = true;
     }
-    string type = "R_386_32";
-    if(register_num == 7) type = "R_386_PC32";
+    string type = "R_386_16";
+    if(register_num == 7) type = "R_386_PC16";
     int symb_id = st->findSymbol(symbol)->id;
     current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter, symb_id, type)));
     if(null_flag) current_section = nullptr;
@@ -622,11 +669,14 @@ char Assembler::getAdressingMode(string operand, bool is_jump){
             }
         }
         else{
+            if(isSymbol(operand)) return 0x4;
             return 0x0;
         }
     }else{
         switch(operand[0]){
-            case '$': return 0x0;
+            case '$': 
+                if(isSymbol(operand.substr(1))) return 0x4;
+                return 0x0;
                 break;
             case '%': return 0x1;
                 break;
@@ -720,12 +770,15 @@ map<string,int> Assembler::createMap()
 }
 
 bool Assembler::isSymbol(string x){
+    if(x[0]=='0') return false;
+    if(x.size()==1) return !isdigit(x[0]);
+    if(x.substr(2) == "0x" || x.substr(2)== "0X") return false;
     return !all_of(x.begin(), x.end(), ::isdigit); // differentiating symbols and literals
 }
 
 void Assembler::end(){
     // FOR TESTING
-    /*current_section = nullptr;
+    current_section = nullptr;
     resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
@@ -740,7 +793,7 @@ void Assembler::end(){
     for(Section* s: sections){
         cout<<"#"<<s->name<<endl;
         cout<<s->getMachineCodeString()<<endl;
-    }*/
+    }
 
     // FINAL
     stringstream output;
