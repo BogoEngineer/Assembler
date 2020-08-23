@@ -33,7 +33,7 @@ void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_
 void SymbolTable::backpatch(vector<char>& machine_code, string section_name){
     //cout<<"SECTION: "<<section_name;
     for(SymbolTableEntry ste: table){
-        if(ste.defined == false && ste.section != "UND" && ste.local == true) {
+        if(ste.defined == false && ste.section != "UND") {
             cout<<"Could not resolve symbol: "<<ste.name<<endl;
             exit(1);
         }
