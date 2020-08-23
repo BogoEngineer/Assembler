@@ -788,7 +788,7 @@ bool Assembler::isSymbol(string x){
 
 void Assembler::end(){
     // FOR TESTING
-    current_section = nullptr;
+    /*current_section = nullptr;
     resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
@@ -803,7 +803,7 @@ void Assembler::end(){
     for(Section* s: sections){
         cout<<"#"<<s->name<<endl;
         cout<<s->getMachineCodeString()<<endl;
-    }
+    }*/
 
     // FINAL
     stringstream output;

@@ -2,7 +2,7 @@
 .extern c
 
 .section main
-#c:.byte 0x50 # illegal to define a symbol that is already declared as extern
+c:.byte 0x50 # illegal to define a symbol that is already declared as extern
 
 mov $a, $x
 

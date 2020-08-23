@@ -1,6 +1,8 @@
-#.ret.main
+#.retmain
     offset      |    type    |   value   
-              9 |   R_386_16 |          5
+              0 |   R_386_16 |          1
+              0 |   R_386_16 |          5
+              7 |   R_386_16 |          1
 
 #SYMBOL TABLE: 
      name       |  section   |   offset   |   local    |    id    
@@ -8,48 +10,8 @@
               a |        UND |          0 |          g |          1
               b |        UND |          0 |          g |          2
               c |        UND |          0 |          g |          3
-          .main |       main |          0 |          l |          4
-         symbol |       main |          4 |          l |          5
-MACHINE CODE:
-#.main
-4c245424649400052a4c9400044c2474140002245424
-  g |          5
+           main |       main |          0 |          l |          4
+              x |       main |          7 |          g |          5
 MACHINE CODE:
 #main
 649400009400078c140002940000190010002600
-     6
-MACHINE CODE:
-#main
-50649400009400088c140002940000190010002600
-        l |          4
-          nesto |       text |          0 |          l |          5
-      nes_drugo |        bss |         35 |          g |          6
-         svasta |        bss |         35 |          g |          7
-        labela5 |       text |         11 |          l |          8
-     prvalabela |       text |          0 |          l |          9
-              b |       text |         10 |          l |         10
-              a |       text |         10 |          l |         11
-              c |       text |         10 |          l |         12
-           kraj |       text |         11 |          l |         13
-           .bss |        bss |          0 |          l |         14
-  list_byte_bss |        bss |          0 |          l |         15
-            src |        bss |          0 |          l |         16
-        labela1 |        bss |          0 |          l |         17
-MACHINE CODE:
-#.text
-4814ff549400232c940023
-#.bss
-0a00546e00146014379400239c6400326e002155aa3930ffff00000000000000000000
- 0 |          l |         17
-             s6 |       est1 |          2 |          l |         18
-          test2 |       est2 |          0 |          l |         19
-             s9 |       est2 |          2 |          l |         20
-MACHINE CODE:
-#.equ
-
-#.data
-00ff00
-#test1
-00ff00
-#test2
-00ff00
