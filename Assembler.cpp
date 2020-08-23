@@ -70,7 +70,7 @@ vector<char> Assembler::processOneLine(string line){
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
-        if(current_section == nullptr) handleError("Can't have label outside of a section.");
+        if(current_section->name == "UND") handleError("Can't have label outside of a section.");
         defineSymbol(to_process[0].substr(0, to_process[0].length()-1), true, true);
         lab = true;
     }
@@ -98,11 +98,13 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     }
     //if(current_section == nullptr) handleError("Can't have instruction outside of a section.");
     if(current_section->name == "UND") handleError("Can't have instruction outside of a section.");
-    vector<string> words = tm->extractWords(instruction); 
+    vector<string> words = tm->extractWords(instruction);
     //cout<<"INSTRUCTION: "<< words[0]<<endl;
     //cout<<"SECTION: "<<current_section->name<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
+    if(inst->name == "") handleError("Illegal instruction.");
+    if(words.size()-1 != inst->operand_number) handleError("Illegal number of operands.");
     /* 
         Structure of instruction:
         Instruction Description byte: OC4|OC3|OC2|OC1|OC0|S|Un|Un
@@ -141,7 +143,6 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             else if(address_mode == 0x2 || address_mode == 0x3 || address_mode == 0x4) size_mask = 0;*/
             
             if(words[0].size() > inst->name.size() && words[0][words[0].size()-1]=='b') size_mask = 0;
-            cout<<"SIZE: "<<size_mask<<endl;
             size_mask = (size_mask <<2);
             instr_descr_byte |= size_mask;
             byte_code.push_back(instr_descr_byte);
@@ -191,6 +192,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
                     SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, register_num==7 ? -2 : 0); // covering for pcrel also
+                    ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
                         int off = ste->offset + (register_num==7 ? -2 : 0);
                         operand1_related_byte1 = ((off>>8) & 0xFF);
@@ -232,7 +234,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             break;
         }
         case 2:{
-            bool size_mask;
+            int size_mask = 1;
             char address_mode1 = getAdressingMode(words[1], false);
             char address_mode2 = getAdressingMode(words[2], false);
             if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test")) handleError("Immediate addressing mode with destination operand is prohibited.");
@@ -241,8 +243,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             else if(address_mode1 == 0x2 || address_mode1 == 0x3 || address_mode1 == 0x4) size_mask = 0;*/
 
             if(words[0].size() > inst->name.size() && words[0][words[0].size()-1]=='b') size_mask = 0;
-
-            instr_descr_byte |= size_mask<<2;
+            instr_descr_byte |= (size_mask<<2);
             byte_code.push_back(instr_descr_byte);
 
             // operand bytes
@@ -291,6 +292,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -5);
                     else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -3);
                     else SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
+                    ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
                         if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) {
                             operand1_related_byte1 = ((ste->offset-5)>>8) & 0xFF;
@@ -376,6 +378,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
                     SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset, register_num==7 ? -2:0);
+                    ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
                         int off = ste->offset + (register_num==7 ? -2:0);
                         operand2_related_byte1 = (off>>8) & 0xFF;
@@ -532,7 +535,7 @@ void Assembler::dealWithDirective(string directive){
         char byte;
         for(int i=1; i<words.size(); i++){
             if(isSymbol(words[i])){
-                cout<<"WORDS: "<<words[i]<<endl;
+                //cout<<"WORDS: "<<words[i]<<endl;
                 SymbolTableEntry* found = st->findSymbol(words[i]);
                 if(found == nullptr){
                     st->addSymbol(*(new SymbolTableEntry(words[i])));
@@ -770,6 +773,7 @@ map<string,int> Assembler::createMap()
 }
 
 bool Assembler::isSymbol(string x){
+    if(x[0]=='-' || x[0]=='+') x = x.substr(1);
     if(x[0]=='0') return false;
     if(x.size()==1) return !isdigit(x[0]);
     if(x.substr(2) == "0x" || x.substr(2)== "0X") return false;
@@ -864,7 +868,6 @@ Assembler::~Assembler(){
 
 void Assembler::resolveUST(){
     int last = ust.size();
-    //cout<<"LAST: "<<last<<endl;
     while(ust.size()>0){
         for(vector<UncomputableSymbolTableEntry>:: iterator iter = ust.begin(); iter != ust.end();){
             UncomputableSymbolTableEntry uste = *iter;

@@ -8,8 +8,8 @@ labela: #komentar labela
         pop nes_drugo
       jmp  *svasta
   labela5:
-#jos jedan  
-.equ prvalabela, svasta-svasta+dva
+#jedan komentar 
+.equ prvalabela, svasta-svasta+dva # ulancani equ
 .equ a, b
 .equ b, c
 .equ c, 10
@@ -29,4 +29,5 @@ and 50(%r2), svasta(%pc)
 .skip 10
 svasta:
 
+nes_drugo:
 .end
