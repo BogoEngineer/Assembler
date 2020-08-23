@@ -8,7 +8,7 @@ vector<string> FileManager::getContent(string fname){
     string line;
     file.open(fname, ios::in | ios::out);
     if(file.is_open()==false){
-        cout<<"File "<<fname<< " cannot be oppened"<<endl;
+        cout<<"File "<<fname<< " cannot be opened"<<endl;
         return content;
     }
     while(getline(file, line)){
@@ -23,7 +23,6 @@ void FileManager::setContent(string output, string fname){
     file.open(fname, ios::in | ios::out);
     if(file.is_open()==false){
         cout<<"File "<<fname<< " cannot be opened!"<<endl;
-        // comment check
         exit(1);
         return;
     }
