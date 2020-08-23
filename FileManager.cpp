@@ -22,7 +22,7 @@ void FileManager::setContent(string output, string fname){
     this->content = content;
     file.open(fname, ios::in | ios::out);
     if(file.is_open()==false){
-        cout<<"File "<<fname<< " cannot be opened"<<endl;
+        cout<<"File "<<fname<< " cannot be opened!"<<endl;
         exit(1);
         return;
     }
