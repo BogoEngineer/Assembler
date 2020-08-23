@@ -1,23 +1,27 @@
-#.ret.text
+#.ret.main
     offset      |    type    |   value   
-              3 |   R_386_16 |          6
-              7 |   R_386_16 |          7
-             11 |   R_386_16 |          9
-             11 |   R_386_16 |         10
-             11 |   R_386_16 |         11
-
-#.ret.bss
-    offset      |    type    |   value   
-              6 |   R_386_16 |          7
-             12 | R_386_PC16 |          7
+              9 |   R_386_16 |          5
 
 #SYMBOL TABLE: 
      name       |  section   |   offset   |   local    |    id    
                 |        UND |          0 |          g |          0
-            dva |        UND |          0 |          g |          1
-            tri |        UND |          0 |          g |          2
-          .text |       text |          0 |          l |          3
-         labela |       text |          0 |          l |          4
+              a |        UND |          0 |          g |          1
+              b |        UND |          0 |          g |          2
+              c |        UND |          0 |          g |          3
+          .main |       main |          0 |          l |          4
+         symbol |       main |          4 |          l |          5
+MACHINE CODE:
+#.main
+4c245424649400052a4c9400044c2474140002245424
+  g |          5
+MACHINE CODE:
+#main
+649400009400078c140002940000190010002600
+     6
+MACHINE CODE:
+#main
+50649400009400088c140002940000190010002600
+        l |          4
           nesto |       text |          0 |          l |          5
       nes_drugo |        bss |         35 |          g |          6
          svasta |        bss |         35 |          g |          7

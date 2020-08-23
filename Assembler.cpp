@@ -66,6 +66,10 @@ vector<char> Assembler::processOneLine(string line){
     line_of_code += 1;
     // Line recognition - section/instruction/label
     if(tm->isEmpty(line)) return {};
+    if(line[0] == '#') { // full line comments functionality
+        dealWithComment(line);
+        return {};
+    }
     if(line.find(':')!= string::npos) line.replace(line.find(':')+1, 1, line[line.find(':')+1]=='.' ? " ." : " ");
     vector<string> to_process = tm->extractWords(line);
     bool lab = false;
@@ -627,15 +631,16 @@ int Assembler::getInt(string operand){
 
 void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext/*=false*/){
     SymbolTableEntry* found = st->findSymbol(symbol);
+    string sect_name = current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name;
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, ext ? "UND" : current_section->name.substr(1), ext ? 0 : current_section->location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, ext ? "UND" : sect_name, ext ? 0 : current_section->location_counter, local, defined)));
     else
     {
         if(found->section == "UND") handleError("Symbol " + found->name + " is already declared as extern.");
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
         found->offset = current_section->location_counter;
-        found->section = current_section->name.substr(1);
+        found->section = sect_name;
     }
 }
 
@@ -740,6 +745,7 @@ string Assembler::handleError(string error){
 }
 
 void Assembler::dealWithSection(string section_name){
+    string sect_name = section_name[0] == '.' ? section_name.substr(1) : section_name;
     Section* found = findSection(section_name);
     if(found != nullptr){
         current_section = found;
@@ -747,7 +753,7 @@ void Assembler::dealWithSection(string section_name){
     }
     current_section = new Section(section_name);
     sections.push_back(current_section);
-    st->addSymbol(*(new SymbolTableEntry(section_name, section_name.substr(1), 0, true, true)));
+    st->addSymbol(*(new SymbolTableEntry(section_name, sect_name, 0, true, true)));
     return;
 }
 
