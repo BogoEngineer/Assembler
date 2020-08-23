@@ -22,8 +22,8 @@ list_byte_bss:
   src: 
 labela1: .word 10
 pop 20(%pc) 
-movb $55, svasta
-and 50(%r2), svasta(%pc)
+movb $55,  svasta
+and 50(%r2),svasta(%pc)
 .word 0xAA55, 12345, -1
 .skip 10
 svasta:

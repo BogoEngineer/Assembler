@@ -5,6 +5,18 @@
 #include <math.h>
 #include <sstream>
 
+string addSpaceAfterComma(string x){
+    string ret="";
+    for(int i=0;i<x.length();i++)
+    {
+        if(x[i]!=',')
+        ret=ret+x[i];
+        else
+        ret=ret+x[i]+" ";
+    }
+    return ret;
+}
+
 Assembler::Assembler(string ifn, string ofn){
     input_file_name = ifn;
     output_file_name = ofn;
@@ -71,7 +83,7 @@ vector<char> Assembler::processOneLine(string line){
         return {};
     }
     if(line.find(':')!= string::npos) line.replace(line.find(':')+1, 1, line[line.find(':')+1]=='.' ? " ." : " ");
-    vector<string> to_process = tm->extractWords(line);
+    vector<string> to_process = tm->extractWords(addSpaceAfterComma(line));
     bool lab = false;
     if(to_process[0].find(':') != string::npos) {
         if(current_section->name == "UND") handleError("Can't have label outside of a section.");
@@ -103,7 +115,9 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     //if(current_section == nullptr) handleError("Can't have instruction outside of a section.");
     if(current_section->name == "UND") handleError("Can't have instruction outside of a section.");
     vector<string> words = tm->extractWords(instruction);
-    //cout<<"INSTRUCTION: "<< words[0]<<endl;
+    cout<<"INSTRUCTION: "<< words[0]<<" ";
+    for(int i = 1; i<words.size(); i++) cout<<words[i]<<" ";
+    cout<<endl;
     //cout<<"SECTION: "<<current_section->name<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();

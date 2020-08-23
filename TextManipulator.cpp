@@ -1,9 +1,10 @@
 #include "TextManipulator.h"
+#include <algorithm>
+#include <string>
 
 vector<string> TextManipulator::extractWords(string str){
     vector<string> ret = {};
     std::stringstream ss(str);
-
     for (string i; ss >> i;) {
         size_t excess_comma = i.find(',');
         if(excess_comma != string::npos) i.erase(excess_comma);

@@ -1,11 +1,11 @@
-.global a, b
+.global a,b
 .extern c
 
 .section .main
 push %r2
 pop %r2
 
-symbol: .illegal directive
+symbol: #.illegal directive
 
 mov 5, %r5
 push symbol
