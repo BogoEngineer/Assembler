@@ -219,7 +219,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                         operand1_related_byte1 = 0;
                         operand1_related_byte2 = 0;
                     } 
-                    dealWithRelocationRecord(symbol_name, register_num);
+                    dealWithRelocationRecord(symbol_name, 2, register_num);
                 }
 
                 byte_code.push_back(operand1_related_byte1);
@@ -329,7 +329,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                         operand1_related_byte2 = 0;
                     }
 
-                    dealWithRelocationRecord(symbol_name, register_num);
+                    dealWithRelocationRecord(symbol_name, 2, register_num);
                 }
 
                 address_field_offset += 2;
@@ -406,7 +406,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                         operand2_related_byte2 = 0;
                     }
 
-                    dealWithRelocationRecord(symbol_name, register_num);
+                    dealWithRelocationRecord(symbol_name, (address_mode1==0x1 || address_mode1==0x2) ? 3 : 5, register_num);
                 }
                 byte_code.push_back(operand2_related_byte1);
                 byte_code.push_back(operand2_related_byte2);
@@ -510,7 +510,7 @@ void Assembler::dealWithDirective(string directive){
                 uste->it = index_table;
                 ust.push_back(*uste);
                 SymbolTableEntry* found = st->findSymbol(symbol_name);
-                if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name.substr(1), offset, true, false)));
+                if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, "UND", offset, true, false)));
                 else{
                     found->section = current_section->name.substr(1);
                     found->offset = offset;
@@ -519,20 +519,39 @@ void Assembler::dealWithDirective(string directive){
                 }
         }else{
             int num = 0;
+            map<string, int> section_name_map = {};
             for(IndexTableEntry ite: index_table){
+                if (section_name_map.find(ite.section) != section_name_map.end()) section_name_map[ite.section] = 0;
+                section_name_map[ite.section] += 1;
                 if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
                 if(ite.value == 1 && num == 0) num = 1;
                 else if(ite.value ==1 && num == 1) handleError("Illegal expression.");
             }
             SymbolTableEntry* found = st->findSymbol(symbol_name);
-            if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, current_section->name.substr(1), offset, true, true)));
+
+            // determin which section left symbol belongs to
+            string section_name="UND";
+            map<string, int>::iterator it;
+            int max_value = 0;
+            for ( it = section_name_map.begin(); it != section_name_map.end(); it++ ){
+                if(it->second > max_value) max_value = it->second;
+            }
+
+            for ( it = section_name_map.begin(); it != section_name_map.end(); it++ ){
+                if(it->second == max_value){
+                    section_name = it->first;
+                    break;
+                }
+            }
+
+            if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, section_name, offset, true, true)));
             else{
-                found->section = current_section->name.substr(1);
+                found->section = section_name;
                 found->offset = offset;
                 found->local = true;
                 found->defined = true;
             }
-            if(num != 0) dealWithRelocationRecord(symbol_name);
+            // if(num != 0) dealWithRelocationRecord(symbol_name); dont need reloc record for directive
         }
         break;
     }
@@ -566,7 +585,7 @@ void Assembler::dealWithDirective(string directive){
                     }
                 }
 
-                dealWithRelocationRecord(words[i]);
+                // dealWithRelocationRecord(words[i]); dont need reloc record for directive
             }
             else{
                 byte = (char)getInt(words[i]);
@@ -591,7 +610,7 @@ void Assembler::dealWithDirective(string directive){
                     }
                 }
 
-                dealWithRelocationRecord(words[i]);
+                // dealWithRelocationRecord(words[i]); dont need reloc record for directive
             }
             else{
                 word = (short int)getInt(words[i]);
@@ -653,6 +672,7 @@ void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext/*
         if(found->section == "UND") handleError("Symbol " + found->name + " is already declared as extern.");
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
+        found->local = local;
         found->offset = current_section->location_counter;
         found->section = sect_name;
     }
@@ -661,7 +681,7 @@ void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext/*
 void Assembler::dealWithComment(string comment){
 }
 
-void Assembler::dealWithRelocationRecord(string symbol, int register_num/*=10*/, string section/*=""*/){
+void Assembler::dealWithRelocationRecord(string symbol, int instruction_offset, int register_num/*=10*/, string section/*=""*/){
     //cout<<"RELOC FOR: "<<symbol<<" IN SECTION:" << current_section->name<<endl;
     bool null_flag = false;
     if(current_section == nullptr) {
@@ -670,8 +690,10 @@ void Assembler::dealWithRelocationRecord(string symbol, int register_num/*=10*/,
     }
     string type = "R_386_16";
     if(register_num == 7) type = "R_386_PC16";
-    int symb_id = st->findSymbol(symbol)->id;
-    current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter, symb_id, type)));
+    SymbolTableEntry *ste = st->findSymbol(symbol);
+    int symb_id = ste->id;
+
+    current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter+instruction_offset, symb_id, type, symbol)));
     if(null_flag) current_section = nullptr;
 }
 
@@ -825,6 +847,15 @@ void Assembler::end(){
     resolveUST();
     for(Section* section: sections){
         st->backpatch(section->machine_code, section->name);
+
+        // cleaning relocation tables of potential unnecessary relocation records
+        vector<RelocationTableEntry>::iterator itr;
+        for( itr = section->relocation_table.begin(); itr != section->relocation_table.end();){
+            if((*itr).type == "R_386_PC16" && st->findSymbol((*itr).symbol_name)->section == section->name) itr = section->relocation_table.erase(itr);
+            else itr++;
+
+        }
+
         output<<"#.ret"<<section->name<<endl;
         output<<section->getRelocationTable()<<endl;
     }
@@ -917,15 +948,35 @@ void Assembler::resolveUST(){
             }
             if(uste.needed_symbols.size() == 0){
                 int num = 0;
+                map<string, int> section_name_map = {};
                 for(IndexTableEntry ite: index_table){
+                    if (section_name_map.find(ite.section) != section_name_map.end()) section_name_map[ite.section] = 0;
+                    section_name_map[ite.section] += 1;
                     if(ite.value != 0 && ite.value != 1) handleError("Illegal expression.");
                     if(ite.value == 1 && num == 0) num = 1;
                     else if(ite.value ==1 && num == 1) handleError("Illegal expression.");
                 }
+
+            // determin which section left symbol belongs to
+            string section_name="UND";
+            map<string, int>::iterator it;
+            int max_value = 0;
+            for ( it = section_name_map.begin(); it != section_name_map.end(); it++ ){
+                if(it->second > max_value) max_value = it->second;
+            }
+
+            for ( it = section_name_map.begin(); it != section_name_map.end(); it++ ){
+                if(it->second == max_value){
+                    section_name = it->first;
+                    break;
+                }
+            }
+
                 SymbolTableEntry* left = st->findSymbol(uste.left_symbol);
+                left->section = section_name;
                 left->defined = true;
                 left->offset = offset;
-                if(num != 0) dealWithRelocationRecord(uste.left_symbol, 10, left->section);
+                //if(num != 0) dealWithRelocationRecord(uste.left_symbol, 10, left->section); dont need reloc record for directive
                 iter = ust.erase(iter);
             }else { iter++; }
         }

@@ -1,20 +1,13 @@
-#.ret.main
+#.retmain
     offset      |    type    |   value   
-              0 | R_386_PC16 |          2
-              4 | R_386_PC16 |          2
-              9 | R_386_PC16 |          2
-              9 |   R_386_16 |          3
-             30 | R_386_PC16 |          2
-             34 | R_386_PC16 |          2
-             39 | R_386_PC16 |          2
-             39 |   R_386_16 |          3
+             15 |   R_386_16 |          2
 
 #SYMBOL TABLE: 
      name       |  section   |   offset   |   local    |    id    
                 |        UND |          0 |          g |          0
-          .main |       main |          0 |          l |          1
-              a |       main |         26 |          g |          2
-              b |       main |         30 |          g |          3
+              b |       main |         17 |          l |          1
+              a |       main |         22 |          l |          2
+           main |       main |          0 |          l |          3
 MACHINE CODE:
-#.main
-44940018646e00172c646e001594001e00000000000000000000aaaa0f0044940018646e00172c646e001594001e
+#main
+00000000000000000000646e000c940016

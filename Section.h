@@ -7,8 +7,9 @@ struct RelocationTableEntry{
     int offset;
     string type;
     int value;
+    string symbol_name;
 
-    RelocationTableEntry(int o, int v, string t="R_386_32"):offset(o), type(t), value(v){}
+    RelocationTableEntry(int o, int v, string t, string syn):offset(o), type(t), value(v), symbol_name(syn){}
 };
 
 class Section{
