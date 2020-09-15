@@ -27,7 +27,7 @@ Assembler::Assembler(string ifn, string ofn){
     fm = new FileManager();
     tm = new TextManipulator();
     current_section = new Section("UND"); // default "empty" section for globals without definition or externs
-    st->addSymbol(*(new SymbolTableEntry("", "UND")));
+    st->addSymbol(*(new SymbolTableEntry("", "UND", 0, true)));
     
     sections = {};
 
@@ -209,10 +209,10 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
-                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, register_num==7 ? -2 : 0); // covering for pcrel also
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, register_num==7 ? -2 : 0, register_num==7); // covering for pcrel also
                     ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
-                        int off = ste->offset + (register_num==7 ? -2 : 0);
+                        int off = ste->offset + (register_num==7 && ste->section==current_section->name ? -2-(current_section->location_counter+2) : -2);
                         operand1_related_byte1 = ((off>>8) & 0xFF);
                         operand1_related_byte2 = ((off) & 0xFF);
                     }else{
@@ -307,18 +307,18 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
                     SymbolTableEntry* ste;
-                    if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -5);
-                    else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -3);
+                    if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -5, true);
+                    else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -3, true);
                     else SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
                     ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
                         if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) {
-                            operand1_related_byte1 = ((ste->offset-5)>>8) & 0xFF;
-                            operand1_related_byte2 = (ste->offset-5) & 0xFF;
+                            operand1_related_byte1 = ((-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0))>>8) & 0xFF;
+                            operand1_related_byte2 = (ste->offset-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0)) & 0xFF;
                         }
                         else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) {
-                            operand1_related_byte1 = ((ste->offset-3)>>8) & 0xFF;
-                            operand1_related_byte2 = (ste->offset-3) & 0xFF;
+                            operand1_related_byte1 = ((-3-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0))>>8) & 0xFF;
+                            operand1_related_byte2 = (-3-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0)) & 0xFF;
                         }
                         else{
                             operand1_related_byte1 = (ste->offset>>8) & 0xFF;
@@ -395,10 +395,10 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
-                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset, register_num==7 ? -2:0);
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset, register_num==7 ? -2:0, register_num==7);
                     ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
-                        int off = ste->offset + (register_num==7 ? -2:0);
+                        int off = (register_num==7 ? (-2-(ste->section==current_section->name ? current_section->location_counter+address_field_offset-ste->offset:0)):ste->offset);
                         operand2_related_byte1 = (off>>8) & 0xFF;
                         operand2_related_byte2 = (off) & 0xFF;
                     }else{
@@ -577,15 +577,18 @@ void Assembler::dealWithDirective(string directive){
                 if(found == nullptr){
                     st->addSymbol(*(new SymbolTableEntry(words[i])));
                     SymbolTableEntry* added = st->findSymbol(words[i]);
-                    added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name.substr(1))));
+                    added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
+                    current_section->getMachineCode().push_back(0 & 0xFF);
                 }else{
                     if(found->defined != false){
                         current_section->getMachineCode().push_back(found->offset & 0xFF);
-                        found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name.substr(1))));
+                    }
+                    else {
+                        found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
                     }
                 }
 
-                // dealWithRelocationRecord(words[i]); dont need reloc record for directive
+                dealWithRelocationRecord(words[i], -1);
             }
             else{
                 byte = (char)getInt(words[i]);
@@ -603,14 +606,20 @@ void Assembler::dealWithDirective(string directive){
                 SymbolTableEntry* found = st->findSymbol(words[i]);
                 if(found == nullptr){
                     st->addSymbol(*(new SymbolTableEntry(words[i])));
+                    SymbolTableEntry* added = st->findSymbol(words[i]);
+                    added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
+                    current_section->getMachineCode().push_back(0 & 0xFF);
+                    current_section->getMachineCode().push_back(0 & 0xFF);
                 }else{
                     if(found->defined != false){
                         current_section->getMachineCode().push_back(found->offset & 0xFF);
                         current_section->getMachineCode().push_back((found->offset>>8) & 0xFF);
+                    }else{
+                        found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
                     }
                 }
 
-                // dealWithRelocationRecord(words[i]); dont need reloc record for directive
+                dealWithRelocationRecord(words[i], -1);
             }
             else{
                 word = (short int)getInt(words[i]);
@@ -693,7 +702,11 @@ void Assembler::dealWithRelocationRecord(string symbol, int instruction_offset, 
     SymbolTableEntry *ste = st->findSymbol(symbol);
     int symb_id = ste->id;
 
-    current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter+instruction_offset, symb_id, type, symbol)));
+    SymbolTableEntry *sectionSymbol = st->findSymbol(ste->section);
+    if(sectionSymbol == nullptr) sectionSymbol = st->findSymbol(""); // UND section
+
+    current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter+instruction_offset, 
+    sectionSymbol->id, type, symbol)));
     if(null_flag) current_section = nullptr;
 }
 
@@ -758,18 +771,20 @@ char Assembler::higherByteRegister(string operand){
     return rgstr[2] == 'h' ? 1 : 0;
 }
 
-SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction/*=0*/){
+SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction/*=0*/, bool pcrel/*=false*/){
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
         st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1))));
         SymbolTableEntry* added = st->findSymbol(symbolName);
-        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1), end_of_instruction)));
+        //cout<<"ADDED: "<<added->name<<endl;
+        added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name, end_of_instruction, pcrel)));
         return added;
     }else{
         if(found->defined == true){
             return found;
         }else{
-            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name.substr(1), end_of_instruction)));
+            //cout<<"FOUND: "<<found->name<<endl;
+            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name, end_of_instruction, pcrel)));
             return found;
         }
     }
@@ -851,9 +866,16 @@ void Assembler::end(){
         // cleaning relocation tables of potential unnecessary relocation records
         vector<RelocationTableEntry>::iterator itr;
         for( itr = section->relocation_table.begin(); itr != section->relocation_table.end();){
-            if((*itr).type == "R_386_PC16" && st->findSymbol((*itr).symbol_name)->section == section->name) itr = section->relocation_table.erase(itr);
+            if((*itr).value == 0){
+                SymbolTableEntry* ste = st->findSymbol((*itr).symbol_name);
+                if(ste->section != "UND"){ // if symbol is not extern
+                    (*itr).value = st->findSymbol(ste->section)->id;
+                }else{
+                    (*itr).value = ste->id;
+                }
+            }
+            if((*itr).type == "R_386_PC16" && st->findSymbol((*itr).symbol_name)->section == section->name) itr = section->relocation_table.erase(itr); // erase uneccessary relocation records
             else itr++;
-
         }
 
         output<<"#.ret"<<section->name<<endl;
@@ -984,3 +1006,4 @@ void Assembler::resolveUST(){
         last = ust.size();
     }
 }
+

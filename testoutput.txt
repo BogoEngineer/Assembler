@@ -1,13 +1,20 @@
+#.retprethodna
+    offset      |    type    |   value   
+             11 |   R_386_16 |          1
+
 #.retmain
     offset      |    type    |   value   
-             15 |   R_386_16 |          2
+             12 | R_386_PC16 |          1
 
 #SYMBOL TABLE: 
      name       |  section   |   offset   |   local    |    id    
-                |        UND |          0 |          g |          0
-              b |       main |         17 |          l |          1
-              a |       main |         22 |          l |          2
+                |        UND |          0 |          l |          0
+      prethodna |  prethodna |          0 |          l |          1
+              a |  prethodna |         14 |          l |          2
            main |       main |          0 |          l |          3
+              b |       main |         14 |          l |          4
 MACHINE CODE:
+#prethodna
+000000000000000000000500000e2c94fffc
 #main
-00000000000000000000646e000c940016
+000000000000000000002c94000c

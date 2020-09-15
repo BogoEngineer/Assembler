@@ -19,13 +19,16 @@ void SymbolTableEntry::addForwardReference(ForwardReferenceTableEntry frte){
 }
 
 void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_name){
-    short int symbol = this->offset;
+    SymbolTableEntry *ste = this;
+    short int symbol = ste->offset;
+    //cout<<"SYMBOL: "<<this->name<<" FRTE: "<<this->forward_reference_table.size()<<endl;
     for(ForwardReferenceTableEntry frte: forward_reference_table){
-        if(frte.section != section_name.substr(1)) continue;
-        //cout<<"SYMBOL: "<<this->name;
+        if(frte.section != (section_name[0] == '.' ? section_name.substr(1) : section_name)) continue;
         //cout<<" PATCH: "<<frte.byte;
-        (*machine_code)[frte.byte + 1] =  (symbol+frte.pcrel) & 0xFF;
-        (*machine_code)[frte.byte] = ((symbol+frte.pcrel)>>8) & 0xFF;
+        //cout<<"SEC1: "<<frte.section<<" SEC2: "<<ste->section<<endl;
+        int pcrel = frte.pcrel ? ((frte.section==ste->section ? (-frte.byte):0) + frte.end_of_instruction_offset) : 0;
+        (*machine_code)[frte.byte + 1] =  (symbol+pcrel) & 0xFF;
+        (*machine_code)[frte.byte] = ((symbol+pcrel)>>8) & 0xFF;
         //cout<< " VALUE: "<< symbol<<endl;
     }
 }

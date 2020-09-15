@@ -4,11 +4,12 @@
 #include <vector>
 
 struct ForwardReferenceTableEntry{
-    int pcrel;
+    int end_of_instruction_offset;
     int byte;
     string section;
+    bool pcrel;
 
-    ForwardReferenceTableEntry(int b, string sec, int p = 0): byte(b), section(sec), pcrel(p){}
+    ForwardReferenceTableEntry(int b, string sec, int eoio = 0, int lc = 0, bool pcr=false): byte(b), section(sec), end_of_instruction_offset(eoio), pcrel(pcr){}
 };
 
 struct SymbolTableEntry{
