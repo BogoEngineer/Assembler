@@ -26,7 +26,7 @@ void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_
         if(frte.section != (section_name[0] == '.' ? section_name.substr(1) : section_name)) continue;
         //cout<<" PATCH: "<<frte.byte;
         //cout<<"SEC1: "<<frte.section<<" SEC2: "<<ste->section<<endl;
-        int pcrel = frte.pcrel ? ((frte.section==ste->section ? (-frte.byte):0) + frte.end_of_instruction_offset) : 0;
+        int pcrel = frte.pcrel ? ((frte.section == ste->section ? (-frte.byte):0) + frte.end_of_instruction_offset) : 0;
         (*machine_code)[frte.byte] =  (symbol+pcrel) & 0xFF;
         (*machine_code)[frte.byte + 1] = ((symbol+pcrel)>>8) & 0xFF; // little endian
         //cout<< " VALUE: "<< symbol<<endl;
@@ -40,6 +40,7 @@ void SymbolTable::backpatch(vector<char>& machine_code, string section_name){
             cout<<"Could not resolve symbol: "<<ste.name<<endl;
             exit(1);
         }
+        if(ste.local==false) continue; // no need to backpatch for global symbols
         ste.resolveSymbol(&machine_code, section_name);
     }
 }

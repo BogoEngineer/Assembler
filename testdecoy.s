@@ -13,7 +13,7 @@ push $a
 .section data
 sim2: jgt *12(%r2)
 jne sim1
-.word 0x7, c  ,sim3
+.word 0x7,c,sim3
 and (%r3), sim2
 shr %r0, $sim2
 

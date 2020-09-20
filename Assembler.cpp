@@ -122,6 +122,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
     //cout<<"SECTION: "<<current_section->name<<endl;
     // index 0 - mnemonic, index 1 - first operand, index 2 - second operand
     Instruction* inst = std::find_if(instruction_set.begin(), instruction_set.end(), find_instruction(words[0])).base();
+    //cout<<"INSTRUKCIJA: "<<inst->name<<endl;
     if(inst->name == "") handleError("Illegal instruction.");
     if(words.size()-1 != inst->operand_number) handleError("Illegal number of operands.");
     /* 
@@ -212,7 +213,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
                     SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, register_num==7 ? -2 : 0, register_num==7); // covering for pcrel also
                     ste = st->findSymbol(symbol_name);
-                    if(ste->defined == true){
+                    if(ste->defined == true && ste->local==true){
                         int off = ste->offset + (register_num==7 && ste->section==current_section->name ? -2-(current_section->location_counter+2) : -2);
                         operand1_related_byte2 = ((off) & 0xFF);
                         operand1_related_byte1 = ((off>>8) & 0xFF);
@@ -231,6 +232,26 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode == 0x0){
+                string symbol_name = words[1].find('$') == string::npos ? words[1] : words[1].substr(1);
+                if(isSymbol(symbol_name)){
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2); // covering for pcrel also
+                    ste = st->findSymbol(symbol_name);
+                    if(ste->defined == true && ste->local==true){
+                        int off = ste->offset;
+                        operand1_related_byte2 = ((off) & 0xFF);
+                        operand1_related_byte1 = ((off>>8) & 0xFF);
+                    }else{
+                        operand1_related_byte1 = 0;
+                        operand1_related_byte2 = 0;
+                    } 
+                    dealWithRelocationRecord(symbol_name, 2);
+
+                    byte_code.push_back(operand1_related_byte2);
+                    byte_code.push_back(operand1_related_byte1);
+
+                    current_section->location_counter += byte_code.size();
+                    return byte_code;
+                }
                 short literal = getInt(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
                 if(size_mask == 0){ 
                     operand1_related_byte1 = literal;
@@ -256,7 +277,9 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             int size_mask = 1;
             char address_mode1 = getAdressingMode(words[1], false);
             char address_mode2 = getAdressingMode(words[2], false);
-            if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test")) handleError("Immediate addressing mode with destination operand is prohibited.");
+            if(address_mode2 == 0x0 && (words[0] != "cmp" && words[0] != "test" && words[0]!="shr")) handleError("Immediate addressing mode with destination operand is prohibited.");
+            if((address_mode1 == 0x0 || address_mode2==0x0) && words[0]=="xchg") handleError("Immediate addressing mode with destination operand is prohibited.");
+            if(address_mode1 == 0x0 && words[0]=="shr") handleError("Immediate addressing mode with destination operand is prohibited.");
             char addres_mode = (address_mode1 > address_mode2) ? address_mode1 : address_mode2;
             /*if(address_mode1 == 0x0 || address_mode1 == 0x1) size_mask = 1;
             else if(address_mode1 == 0x2 || address_mode1 == 0x3 || address_mode1 == 0x4) size_mask = 0;*/
@@ -312,7 +335,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2, -3, true);
                     else SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2);
                     ste = st->findSymbol(symbol_name);
-                    if(ste->defined == true){
+                    if(ste->defined == true && ste->local==true){
                         if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) {
                             operand1_related_byte1 = ((-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0))>>8) & 0xFF;
                             operand1_related_byte2 = (ste->offset-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0)) & 0xFF;
@@ -339,19 +362,38 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode1 == 0x0){
-                short literal = getInt(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
-                if(size_mask == 0){ 
-                    operand1_related_byte1 = literal;
-                    address_field_offset += 1;
-                    byte_code.push_back(operand1_related_byte1);
-                }else{
-                    // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
-                    operand1_related_byte1 = (literal>>8) & 0xFF; 
-                    operand1_related_byte2 = literal & 0xFF;
+                string symbol_name = words[1].find('$') == string::npos ? words[1] : words[1].substr(1);
+                if(isSymbol(symbol_name)){
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, 2); // covering for pcrel also
+                    ste = st->findSymbol(symbol_name);
+                    if(ste->defined == true && ste->local==true){
+                        int off = ste->offset;
+                        operand1_related_byte2 = ((off) & 0xFF);
+                        operand1_related_byte1 = ((off>>8) & 0xFF);
+                    }else{
+                        operand1_related_byte1 = 0;
+                        operand1_related_byte2 = 0;
+                    } 
+                    dealWithRelocationRecord(symbol_name, 2);
 
-                    address_field_offset += 2;
                     byte_code.push_back(operand1_related_byte2);
                     byte_code.push_back(operand1_related_byte1);
+                }
+                else{
+                    short literal = getInt(words[1].find('$') == string::npos ? words[1] : words[1].substr(1));
+                    if(size_mask == 0){ 
+                        operand1_related_byte1 = literal;
+                        address_field_offset += 1;
+                        byte_code.push_back(operand1_related_byte1);
+                    }else{
+                        // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
+                        operand1_related_byte1 = (literal>>8) & 0xFF; 
+                        operand1_related_byte2 = literal & 0xFF;
+
+                        address_field_offset += 2;
+                        byte_code.push_back(operand1_related_byte2);
+                        byte_code.push_back(operand1_related_byte1);
+                    }
                 }
             }
 
@@ -378,8 +420,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 return byte_code;    
             }
 
-            char operand2_related_byte1;
-            char operand2_related_byte2;
+            int operand2_related_byte1;
+            int operand2_related_byte2;
             if(address_mode2 == 0x3 || address_mode2 == 0x4){
                 size_t potential_reg_ind = words[2].find('(');
                 int register_num = 10;
@@ -390,15 +432,15 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }
 
                 if(!isSymbol(potential_symbol)){
-                    short int literal = getInt(potential_symbol);
-                    operand1_related_byte1 = (literal>>8) & 0xFF;
-                    operand1_related_byte2 = literal & 0xFF;
+                    short literal = getInt(potential_symbol);
+                    operand2_related_byte1 = (literal>>8) & 0xff;
+                    operand2_related_byte2 = literal & 0xff;
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
                     SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset, register_num==7 ? -2:0, register_num==7);
                     ste = st->findSymbol(symbol_name);
-                    if(ste->defined == true){
+                    if(ste->defined == true && ste->local==true){
                         int off = (register_num==7 ? (-2-(ste->section==current_section->name ? current_section->location_counter+address_field_offset-ste->offset:0)):ste->offset);
                         operand2_related_byte1 = (off>>8) & 0xFF;
                         operand2_related_byte2 = (off) & 0xFF;
@@ -417,6 +459,26 @@ vector<char> Assembler::dealWithInstruction(string instruction){
             }
 
             if(address_mode2 == 0x0){
+                string symbol_name = words[2].find('$') == string::npos ? words[2] : words[2].substr(1);
+                if(isSymbol(symbol_name)){
+                    SymbolTableEntry* ste = dealWithSymbol(symbol_name, address_field_offset); // covering for pcrel also
+                    ste = st->findSymbol(symbol_name);
+                    if(ste->defined == true && ste->local==true){
+                        int off = ste->offset;
+                        operand1_related_byte2 = ((off) & 0xFF);
+                        operand1_related_byte1 = ((off>>8) & 0xFF);
+                    }else{
+                        operand1_related_byte1 = 0;
+                        operand1_related_byte2 = 0;
+                    } 
+                    dealWithRelocationRecord(symbol_name, 2);
+
+                    byte_code.push_back(operand1_related_byte2);
+                    byte_code.push_back(operand1_related_byte1);
+
+                    current_section->location_counter += byte_code.size();
+                    return byte_code;
+                }
                 short literal = getInt(words[2].find('$') == string::npos ? words[2] : words[2].substr(1));
                 if(size_mask == 0){ 
                     operand2_related_byte1 = literal;
@@ -621,7 +683,16 @@ void Assembler::dealWithDirective(string directive){
                         current_section->getMachineCode().push_back(found->offset & 0xFF);
                         current_section->getMachineCode().push_back((found->offset>>8) & 0xFF);
                     }else{
-                        found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
+                        //cout<<"POS: "<<current_section->location_counter<<endl;
+                        if(found->externn==true){
+                            current_section->getMachineCode().push_back(0 & 0xFF);
+                            current_section->getMachineCode().push_back(0 & 0xFF);
+                        }
+                        else{
+                            found->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name)));
+                            current_section->getMachineCode().push_back(0 & 0xFF);
+                            current_section->getMachineCode().push_back(0 & 0xFF);
+                        }
                     }
                 }
 
@@ -659,6 +730,7 @@ int Assembler::getInt(string operand){
             for(int i=0; i<binary.size(); i++){
                 ret += (binary[i]-'0')*pow(2,i);
             }
+            //cout<<"binary: "<<binary<<" dec: "<<ret<<endl;
         }
         else if(operand[1]=='x' || operand[1]=='X'){
             string hex = operand.substr(2);
@@ -713,7 +785,7 @@ void Assembler::dealWithRelocationRecord(string symbol, int instruction_offset, 
     if(sectionSymbol == nullptr) sectionSymbol = st->findSymbol(""); // UND section
 
     current_section->relocation_table.push_back(*(new RelocationTableEntry(current_section->location_counter+instruction_offset, 
-    sectionSymbol->id, type, symbol)));
+    ste->local ? sectionSymbol->id : ste->id, type, symbol)));
     if(null_flag) current_section = nullptr;
 }
 
@@ -733,13 +805,13 @@ char Assembler::getAdressingMode(string operand, bool is_jump){
             }
         }
         else{
-            if(isSymbol(operand)) return 0x4;
+            //if(isSymbol(operand)) return 0x4;
             return 0x0;
         }
     }else{
         switch(operand[0]){
             case '$': 
-                if(isSymbol(operand.substr(1))) return 0x4;
+                //if(isSymbol(operand.substr(1))) return 0x4;
                 return 0x0;
                 break;
             case '%': return 0x1;
@@ -779,6 +851,7 @@ char Assembler::higherByteRegister(string operand){
 }
 
 SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction/*=0*/, bool pcrel/*=false*/){
+    //if(pcrel) cout<<"PCREL: "<<end_of_instruction<<endl;
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
         st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1), 0, true)));

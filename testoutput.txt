@@ -2,7 +2,7 @@
     offset      |    type    |   value   
               2 |   R_386_16 |         11
              10 |   R_386_16 |          5
-             14 |   R_386_16 |         12
+             14 |   R_386_16 |          2
 
 #.retdata
     offset      |    type    |   value   
@@ -10,7 +10,7 @@
              10 |   R_386_16 |          4
              12 |   R_386_16 |         12
              17 |   R_386_16 |         11
-             22 |   R_386_16 |         11
+             21 |   R_386_16 |         11
 
 #.retsekcija_3
     offset      |    type    |   value   
@@ -24,7 +24,7 @@
               b |       text |         12 |          g |          3
               c |        UND |          0 |          g |          4
            text |       text |          0 |          l |          5
-           sim3 |  sekcija_3 |         14 |          g |          6
+           sim3 |  sekcija_3 |         14 |          l |          6
               d |        ABS |         25 |          l |          7
            sim2 |       data |          0 |          l |          8
            sim1 |       text |          4 |          l |          9
@@ -33,8 +33,8 @@
       sekcija_3 |  sekcija_3 |          0 |          l |         12
 MACHINE CODE:
 #text
-2c6a0000036414001a9400044c940005
+2c6a00000364141a009404004c140000
 #data
-4464000c3c94000207000000000e00c420940000
+44640c003c140400070000000e009c46940000c420140000
 #sekcija_3
-b46e000e2264286c0090346e00027014022a542c
+b46e09002264286c0600346e02007014022a542c
