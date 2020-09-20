@@ -21,10 +21,11 @@ public:
     short int offset;
     bool local;
     bool defined;
+    bool externn;
     vector<ForwardReferenceTableEntry> forward_reference_table;
 
-    SymbolTableEntry(string n, string s="", short int o=0, bool l=0, bool d=false): 
-    name(n), section(s), offset(o), local(l), defined(d){
+    SymbolTableEntry(string n, string s="", short int o=0, bool l=0, bool d=false, bool e=false): 
+    name(n), section(s), offset(o), local(l), defined(d), externn(e){
         id = global_id;
         global_id += 1;
         forward_reference_table = {};

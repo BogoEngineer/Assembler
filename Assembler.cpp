@@ -28,6 +28,7 @@ Assembler::Assembler(string ifn, string ofn){
     tm = new TextManipulator();
     current_section = new Section("UND"); // default "empty" section for globals without definition or externs
     st->addSymbol(*(new SymbolTableEntry("", "UND", 0, true)));
+    st->addSymbol(*(new SymbolTableEntry("ABS", "ABS", 0, true, true)));
     
     sections = {};
 
@@ -204,8 +205,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }
                 if(!isSymbol(potential_symbol)){
                     short int literal = getInt(potential_symbol);
-                    operand1_related_byte1 = (literal>>8) & 0xFF;
                     operand1_related_byte2 = literal & 0xFF;
+                    operand1_related_byte1 = (literal>>8) & 0xFF;
                 }else{
                     string symbol_name = potential_symbol;
                     if(symbol_name[0] == '*' || symbol_name[0] == '$') symbol_name = symbol_name.substr(1);
@@ -213,8 +214,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     ste = st->findSymbol(symbol_name);
                     if(ste->defined == true){
                         int off = ste->offset + (register_num==7 && ste->section==current_section->name ? -2-(current_section->location_counter+2) : -2);
-                        operand1_related_byte1 = ((off>>8) & 0xFF);
                         operand1_related_byte2 = ((off) & 0xFF);
+                        operand1_related_byte1 = ((off>>8) & 0xFF);
                     }else{
                         operand1_related_byte1 = 0;
                         operand1_related_byte2 = 0;
@@ -222,8 +223,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     dealWithRelocationRecord(symbol_name, 2, register_num);
                 }
 
-                byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
+                byte_code.push_back(operand1_related_byte1);
 
                 current_section->location_counter += byte_code.size();
                 return byte_code;
@@ -238,12 +239,12 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     current_section->location_counter += byte_code.size();
                     return byte_code;
                 }else{
-                    // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
+                    // little endian
                     operand1_related_byte1 = (literal>>8) & 0xFF; 
                     operand1_related_byte2 = literal & 0xFF;
 
-                    byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
+                    byte_code.push_back(operand1_related_byte1);
 
                     current_section->location_counter += byte_code.size();
                     return byte_code;
@@ -333,8 +334,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                 }
 
                 address_field_offset += 2;
-                byte_code.push_back(operand1_related_byte1);
                 byte_code.push_back(operand1_related_byte2);
+                byte_code.push_back(operand1_related_byte1);
             }
 
             if(address_mode1 == 0x0){
@@ -349,8 +350,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     operand1_related_byte2 = literal & 0xFF;
 
                     address_field_offset += 2;
-                    byte_code.push_back(operand1_related_byte1);
                     byte_code.push_back(operand1_related_byte2);
+                    byte_code.push_back(operand1_related_byte1);
                 }
             }
 
@@ -408,8 +409,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
 
                     dealWithRelocationRecord(symbol_name, (address_mode1==0x1 || address_mode1==0x2) ? 3 : 5, register_num);
                 }
-                byte_code.push_back(operand2_related_byte1);
                 byte_code.push_back(operand2_related_byte2);
+                byte_code.push_back(operand2_related_byte1);
 
                 current_section->location_counter += byte_code.size();
                 return byte_code;
@@ -427,8 +428,8 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     // Assumption that  higher byte goes to first and lower to second bytes in instruction encoding
                     operand2_related_byte1 = literal & 0xFF00; 
                     operand2_related_byte2 = literal & 0x00FF;
-                    byte_code.push_back(operand2_related_byte1);
                     byte_code.push_back(operand2_related_byte2);
+                    byte_code.push_back(operand2_related_byte1);
 
                     current_section->location_counter += byte_code.size();
                     return byte_code;
@@ -478,8 +479,12 @@ void Assembler::dealWithDirective(string directive){
                         uste->needed_symbols.push_back(to_string(sign) + divided[i]);
                         continue;
                     }
+                    if(found->section == "ABS") {
+                        offset += sign*found->offset;
+                        continue;
+                    };
                     if(found->defined == false){
-                        if(found->section == "UND"){ // always add +1 on extern symbols regardless of sign
+                        if(found->externn == true){ // always add +1 on extern symbols regardless of sign
                             vector<IndexTableEntry>::iterator it = std::find_if(index_table.begin(), index_table.end(), find_index_table_entry(found->section));
                             if(it == index_table.end()){
                                 index_table.push_back(*(new IndexTableEntry(found->section, 1)));
@@ -505,6 +510,7 @@ void Assembler::dealWithDirective(string directive){
                 }
             }
         }
+        //cout<<"NEEDED: "<<uste->needed_symbols.size()<<endl;
         if(uste->needed_symbols.size() > 0){
                 uste->offset = offset;
                 uste->it = index_table;
@@ -514,7 +520,7 @@ void Assembler::dealWithDirective(string directive){
                 else{
                     found->section = current_section->name.substr(1);
                     found->offset = offset;
-                    found->local = true;
+                    //found->local = true;
                     found->defined = false;
                 }
         }else{
@@ -544,11 +550,11 @@ void Assembler::dealWithDirective(string directive){
                 }
             }
 
-            if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, section_name, offset, true, true)));
+            if(found == nullptr) st->addSymbol(*(new SymbolTableEntry(symbol_name, num==0 ? "ABS" : section_name, offset, num!=0, true, false)));
             else{
-                found->section = section_name;
+                found->section = num==0 ? "ABS" : section_name;
                 found->offset = offset;
-                found->local = true;
+                //found->local = num!=0;
                 found->defined = true;
             }
             // if(num != 0) dealWithRelocationRecord(symbol_name); dont need reloc record for directive
@@ -588,7 +594,7 @@ void Assembler::dealWithDirective(string directive){
                     }
                 }
 
-                dealWithRelocationRecord(words[i], -1);
+                dealWithRelocationRecord(words[i], 0);
             }
             else{
                 byte = (char)getInt(words[i]);
@@ -619,7 +625,7 @@ void Assembler::dealWithDirective(string directive){
                     }
                 }
 
-                dealWithRelocationRecord(words[i], -1);
+                dealWithRelocationRecord(words[i], 0);
             }
             else{
                 word = (short int)getInt(words[i]);
@@ -642,6 +648,7 @@ void Assembler::dealWithDirective(string directive){
 
 int Assembler::getInt(string operand){
     int ret=0;
+    if(operand[0]=='*' || operand[0]=='$') operand = operand.substr(1);
     if(operand[0]== '\''){
         return operand[1];
     }
@@ -675,13 +682,13 @@ void Assembler::defineSymbol(string symbol, bool local, bool defined, bool ext/*
     SymbolTableEntry* found = st->findSymbol(symbol);
     string sect_name = current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name;
     if(found == nullptr) st->addSymbol
-    (*(new SymbolTableEntry(symbol, ext ? "UND" : sect_name, ext ? 0 : current_section->location_counter, local, defined)));
+    (*(new SymbolTableEntry(symbol, ext ? "UND" : sect_name, ext ? 0 : current_section->location_counter, local, defined, ext)));
     else
     {
-        if(found->section == "UND") handleError("Symbol " + found->name + " is already declared as extern.");
+        if(found->section == "UND" && found->externn) handleError("Symbol " + found->name + " is already declared as extern.");
         if(found->defined == true) handleError("Symbol cant be defined more than once: " + symbol);
         found->defined = true;
-        found->local = local;
+        found->local = found->local==false ? false : local;
         found->offset = current_section->location_counter;
         found->section = sect_name;
     }
@@ -774,7 +781,7 @@ char Assembler::higherByteRegister(string operand){
 SymbolTableEntry* Assembler::dealWithSymbol(string symbolName, int address_field_offset, int end_of_instruction/*=0*/, bool pcrel/*=false*/){
     SymbolTableEntry* found = st->findSymbol(symbolName);
     if(found == nullptr){
-        st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1))));
+        st->addSymbol(*(new SymbolTableEntry(symbolName, current_section->name.substr(1), 0, true)));
         SymbolTableEntry* added = st->findSymbol(symbolName);
         //cout<<"ADDED: "<<added->name<<endl;
         added->addForwardReference(*(new ForwardReferenceTableEntry(current_section->location_counter + address_field_offset, current_section->name[0] == '.' ? current_section->name.substr(1) : current_section->name, end_of_instruction, pcrel)));
@@ -830,10 +837,12 @@ map<string,int> Assembler::createMap()
 }
 
 bool Assembler::isSymbol(string x){
-    if(x[0]=='-' || x[0]=='+') x = x.substr(1);
+    //cout<<x<<endl;
+    if(x[0]=='-' || x[0]=='+' || x[0]=='*' || x[0]=='$') x = x.substr(1);
     if(x[0]=='0') return false;
     if(x.size()==1) return !isdigit(x[0]);
     if(x.substr(2) == "0x" || x.substr(2)== "0X") return false;
+    //cout<<"Provera: "<<x<<endl;
     return !all_of(x.begin(), x.end(), ::isdigit); // differentiating symbols and literals
 }
 
@@ -995,9 +1004,10 @@ void Assembler::resolveUST(){
             }
 
                 SymbolTableEntry* left = st->findSymbol(uste.left_symbol);
-                left->section = section_name;
+                left->section = num==0 ? "ABS" : section_name;
                 left->defined = true;
                 left->offset = offset;
+                //left->local = left->local;
                 //if(num != 0) dealWithRelocationRecord(uste.left_symbol, 10, left->section); dont need reloc record for directive
                 iter = ust.erase(iter);
             }else { iter++; }

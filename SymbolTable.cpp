@@ -27,8 +27,8 @@ void SymbolTableEntry::resolveSymbol(vector<char>* machine_code, string section_
         //cout<<" PATCH: "<<frte.byte;
         //cout<<"SEC1: "<<frte.section<<" SEC2: "<<ste->section<<endl;
         int pcrel = frte.pcrel ? ((frte.section==ste->section ? (-frte.byte):0) + frte.end_of_instruction_offset) : 0;
-        (*machine_code)[frte.byte + 1] =  (symbol+pcrel) & 0xFF;
-        (*machine_code)[frte.byte] = ((symbol+pcrel)>>8) & 0xFF;
+        (*machine_code)[frte.byte] =  (symbol+pcrel) & 0xFF;
+        (*machine_code)[frte.byte + 1] = ((symbol+pcrel)>>8) & 0xFF; // little endian
         //cout<< " VALUE: "<< symbol<<endl;
     }
 }
