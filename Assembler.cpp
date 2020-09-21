@@ -568,7 +568,7 @@ void Assembler::dealWithDirective(string directive){
                         }
                     }
                 }else{
-                    offset += getInt(divided[i]);
+                    offset += sign*getInt(divided[i]);
                 }
             }
         }
