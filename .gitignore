@@ -1,4 +1,5 @@
 /.vscode
 /test_asm.s
-/testoutput.txt
+testoutput.txt
 testdecoy.s
+gigatest.s
