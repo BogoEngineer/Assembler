@@ -338,7 +338,7 @@ vector<char> Assembler::dealWithInstruction(string instruction){
                     if(ste->defined == true && ste->local==true){
                         if(address_mode2!=0x1 && address_mode2!=0x2 && register_num==7) {
                             operand1_related_byte1 = ((-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0))>>8) & 0xFF;
-                            operand1_related_byte2 = (ste->offset-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0)) & 0xFF;
+                            operand1_related_byte2 = (-5-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0)) & 0xFF;
                         }
                         else if((address_mode2==0x1 || address_mode2==0x2) && register_num==7) {
                             operand1_related_byte1 = ((-3-(ste->section==current_section->name ? (current_section->location_counter+2)-ste->offset : 0))>>8) & 0xFF;
@@ -616,7 +616,7 @@ void Assembler::dealWithDirective(string directive){
             else{
                 found->section = num==0 ? "ABS" : section_name;
                 found->offset = offset;
-                //found->local = num!=0;
+                found->local = (found->section!="UND");
                 found->defined = true;
             }
             // if(num != 0) dealWithRelocationRecord(symbol_name); dont need reloc record for directive
@@ -882,9 +882,9 @@ void Assembler::dealWithSection(string section_name){
         current_section = found;
         return;
     }
-    current_section = new Section(section_name);
+    current_section = new Section(sect_name);
     sections.push_back(current_section);
-    st->addSymbol(*(new SymbolTableEntry(section_name, sect_name, 0, true, true)));
+    st->addSymbol(*(new SymbolTableEntry(sect_name, sect_name, 0, true, true)));
     return;
 }
 
@@ -948,15 +948,15 @@ void Assembler::end(){
         // cleaning relocation tables of potential unnecessary relocation records
         vector<RelocationTableEntry>::iterator itr;
         for( itr = section->relocation_table.begin(); itr != section->relocation_table.end();){
-            if((*itr).value == 0){
-                SymbolTableEntry* ste = st->findSymbol((*itr).symbol_name);
-                if(ste->section != "UND"){ // if symbol is not extern
-                    (*itr).value = st->findSymbol(ste->section)->id;
+            if(itr->value == 0){ // relocation to a UND section
+                SymbolTableEntry* ste = st->findSymbol(itr->symbol_name);
+                if(!ste->externn && ste->local){ // if symbol is not extern and is local
+                    itr->value = st->findSymbol(ste->section)->id;
                 }else{
-                    (*itr).value = ste->id;
+                    itr->value = ste->id;
                 }
             }
-            if((*itr).type == "R_386_PC16" && st->findSymbol((*itr).symbol_name)->section == section->name) itr = section->relocation_table.erase(itr); // erase uneccessary relocation records
+            if(itr->type == "R_386_PC16" && st->findSymbol(itr->symbol_name)->section == section->name) itr = section->relocation_table.erase(itr); // erase uneccessary relocation records
             else itr++;
         }
 
@@ -1029,12 +1029,18 @@ void Assembler::resolveUST(){
             bool valid = true;
             int offset = uste.offset;
             vector<IndexTableEntry> index_table = uste.it;
+            //cout<<"SYM: "<<uste.left_symbol<<endl;
             //int needed_symbols_resolved_count = 0;
             for(vector<string>:: iterator itr = uste.needed_symbols.begin(); itr != uste.needed_symbols.end();){
                 string symbol = *itr;
                 int sign = symbol[0]=='1'? 1 : -1;
                 string symb = (sign == 1 ? symbol.substr(1) : symbol.substr(2));
                 SymbolTableEntry* found = st->findSymbol(symb);
+                if(found->section == "ABS") {
+                        offset += sign*found->offset;
+                        itr = uste.needed_symbols.erase(itr);
+                        continue;
+                };
                 if(found->defined == false) {
                     itr++;
                     continue;
@@ -1075,14 +1081,14 @@ void Assembler::resolveUST(){
                     break;
                 }
             }
-
                 SymbolTableEntry* left = st->findSymbol(uste.left_symbol);
                 left->section = num==0 ? "ABS" : section_name;
                 left->defined = true;
                 left->offset = offset;
-                //left->local = left->local;
+                left->local = (left->section != "UND");
                 //if(num != 0) dealWithRelocationRecord(uste.left_symbol, 10, left->section); dont need reloc record for directive
                 iter = ust.erase(iter);
+                //cout<<"Defining: "<<uste.left_symbol<<endl;
             }else { iter++; }
         }
         if(last == ust.size()) handleError("Cannot resolve .equ dependencies.");
